@@ -2,7 +2,7 @@ import { Message } from "./model"
 import { KVS } from "./cache/main"
 import { AuthProvider } from "./auth/main"
 
-const apiPath = 'api/v1'
+const apiPath = '/api/v1'
 
 class DomainOfflineError extends Error {
     constructor(domain: string) {
@@ -44,14 +44,16 @@ export class Api {
         this.authProvider = authProvider
     }
 
-    // GET:/api/v1/message/:id
-    async getMessage<T>(id: string, host: string = '', opts?: FetchOptions<Message<T>>): Promise<Message<T> | null> {
+    private async fetchResource<T>(
+        host: string,
+        path: string,
+        cacheKey: string,
+        opts?: FetchOptions<T>
+    ): Promise<T | null> {
 
-        const cacheKey = `message:${id}`
-
-        let cached: Message<T> | null = null
+        let cached: T | null = null
         if (opts?.cache !== 'no-cache') {
-            cached = await this.cache.get<Message<T>>(cacheKey)
+            cached = await this.cache.get<T>(cacheKey)
             if (cached) {
                 opts?.expressGetter?.(cached)
                 if (opts?.cache !== 'swr' && !opts?.expressGetter) return cached
@@ -59,7 +61,7 @@ export class Api {
         }
         if (opts?.cache === 'force-cache') return null
 
-        const fetchNetwork = async (): Promise<Message<T> | null> => {
+        const fetchNetwork = async (): Promise<T | null> => {
             const authHeaders = await this.authProvider.getHeaders(host)
 
             const requestOptions = {
@@ -70,15 +72,14 @@ export class Api {
                 }
             }
 
-            const messageHost = host || this.host
-            const req = fetch(`https://${messageHost}/${apiPath}/message/${id}`, requestOptions).then(async (res) => {
+            const req = fetch(`https://${host || this.host}${path}`, requestOptions).then(async (res) => {
 
                 if (!res.ok) {
                     if (res.status === 404) return null 
                     return await Promise.reject(new Error(`fetch failed on transport: ${res.status} ${await res.text()}`))
                 }
 
-                const data: ApiResponse<Message<T>> = await res.json()
+                const data: ApiResponse<T> = await res.json()
                 if (data.status != 'ok') {
                     return await Promise.reject(new Error(`getMessage failed on application: ${data.error}`))
                 }
@@ -88,6 +89,7 @@ export class Api {
             })
 
             this.cache.set(cacheKey, req)
+
             return req
         }
 
@@ -97,6 +99,13 @@ export class Api {
         }
 
         return await fetchNetwork()
+    }
+
+    // GET:/api/v1/message/:id
+    async getMessage<T>(id: string, host: string = '', opts?: FetchOptions<Message<T>>): Promise<Message<T> | null> {
+        const cacheKey = `message:${id}`
+        const path = `${apiPath}/message/${id}`
+        return await this.fetchResource(host, path, cacheKey, opts)
     }
 
 
