@@ -39,6 +39,8 @@ export class Api {
     cache: KVS
     host: string = ''
 
+    private inFlightRequests = new Map<string, Promise<any>>()
+
     constructor(authProvider: AuthProvider, cache: KVS) {
         this.cache = cache
         this.authProvider = authProvider
@@ -62,6 +64,12 @@ export class Api {
         if (opts?.cache === 'force-cache') return null
 
         const fetchNetwork = async (): Promise<T | null> => {
+            const url = `https://${host || this.host}${path}`
+
+            if (this.inFlightRequests.has(cacheKey)) {
+                return this.inFlightRequests.get(cacheKey)
+            }
+
             const authHeaders = await this.authProvider.getHeaders(host)
 
             const requestOptions = {
@@ -71,8 +79,8 @@ export class Api {
                     ...authHeaders
                 }
             }
-
-            const req = fetch(`https://${host || this.host}${path}`, requestOptions).then(async (res) => {
+            
+            const req = fetch(url, requestOptions).then(async (res) => {
 
                 if (!res.ok) {
                     if (res.status === 404) return null 
@@ -85,10 +93,13 @@ export class Api {
                 }
                 
                 opts?.expressGetter?.(data.content)
-                return data.content
-            })
+                this.cache.set(cacheKey, data.content)
 
-            this.cache.set(cacheKey, req)
+                return data.content
+            }).finally(() => {
+                this.inFlightRequests.delete(cacheKey)
+            })
+            this.inFlightRequests.set(cacheKey, req)
 
             return req
         }
