@@ -17,6 +17,8 @@ export const IsCKID = (str: string): boolean => {
     return str.startsWith('cck1') && !str.includes('.') && str.length === 42
 }
 
+export type Schema = string
+
 export type TimelineID    = string
 export type MessageID     = string
 export type AssociationID = string

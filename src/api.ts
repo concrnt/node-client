@@ -1,4 +1,4 @@
-import { Message } from "./model"
+import { CCDocument, Message, Schema, TimelineID } from "./model"
 import { KVS } from "./cache/main"
 import { AuthProvider } from "./auth/main"
 
@@ -47,6 +47,8 @@ export class Api {
         this.authProvider = authProvider
     }
 
+
+    // Gets
     private async fetchResource<T>(
         host: string,
         path: string,
@@ -125,6 +127,65 @@ export class Api {
         const cacheKey = `message:${id}`
         const path = `${apiPath}/message/${id}`
         return await this.fetchResource(host, path, cacheKey, opts)
+    }
+
+
+    // Posts
+    async commit<T>(obj: any, host: string = ''): Promise<T> {
+
+        const document = JSON.stringify(obj)
+        const signature = this.authProvider.sign(document)
+
+        const requestOptions = {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+                document,
+                signature
+            })
+        }
+
+        const authHeaders = await this.authProvider.getHeaders(host)
+        Object.assign(requestOptions.headers, authHeaders)
+
+        return await fetch(`https://${host || this.host}${apiPath}/commit`, requestOptions)
+            .then(async (res) => await res.json())
+            .then((data) => {
+                return data.content
+            })
+    }
+
+    async createMessage<T>(
+        schema: Schema,
+        body: T,
+        timelines: TimelineID[],
+        { policy = undefined, policyParams = undefined, policyDefaults = undefined }: { policy?: string, policyParams?: string, policyDefaults?: string } = {}
+    ): Promise<any> {
+
+
+        const ccid = this.authProvider.getCCID()
+        const ckid = this.authProvider.getCKID()
+
+        const documentObj: CCDocument.Message<T> = {
+            signer: ccid,
+            type: 'message',
+            schema,
+            body,
+            meta: {
+                //client: this.client
+            },
+            timelines,
+            signedAt: new Date(),
+            policy,
+            policyParams,
+            policyDefaults
+        }
+
+        if (ckid) {
+            documentObj.keyID = ckid
+        }
+
+        return await this.commit(documentObj)
     }
 
 

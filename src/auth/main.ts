@@ -1,4 +1,4 @@
-import { LoadKey } from "../crypto";
+import { LoadKey, Sign } from "../crypto";
 import { ComputeCCID } from "../crypto";
 import { LoadSubKey } from "../crypto";
 import { CheckJwtIsValid } from "../crypto";
@@ -6,8 +6,11 @@ import { IssueJWT } from "../crypto";
 
 export interface AuthProvider {
     getCCID: () => string;
+    getCKID: () => string | undefined;
     getHeaders: (domain: string) => Promise<Record<string, string>>;
     getPassport: () => Promise<string>;
+
+    sign(data: string): string;
 }
 
 
@@ -79,6 +82,14 @@ export class MasterKeyAuthProvider implements AuthProvider {
 
     getCCID() {
         return this.ccid
+    }
+
+    getCKID() {
+        return undefined
+    }
+
+    sign(data: string): string {
+        return Sign(this.privatekey, data)
     }
 }
 
@@ -153,6 +164,13 @@ export class SubKeyAuthProvider implements AuthProvider {
         return this.ccid
     }
 
+    getCKID() {
+        return this.ckid
+    }
+
+    sign(data: string): string {
+        return Sign(this.privatekey, data)
+    }
 
 }
 
@@ -168,7 +186,15 @@ export class GuestAuthProvider implements AuthProvider {
         throw new Error("Method not implemented.");
     }
 
+    getCKID(): never {
+        throw new Error("Method not implemented.");
+    }
+
     getPassport(): never {
+        throw new Error("Method not implemented.");
+    }
+
+    sign(_data: string): never {
         throw new Error("Method not implemented.");
     }
 }
