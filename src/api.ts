@@ -2,7 +2,7 @@ import { Message } from "./model"
 import { KVS } from "./cache/main"
 import { AuthProvider } from "./auth/main"
 
-const apiPath = '/api/v1'
+const apiPath = 'api/v1'
 
 class DomainOfflineError extends Error {
     constructor(domain: string) {
