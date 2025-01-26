@@ -31,6 +31,7 @@ export interface ApiResponse<T> {
 export interface FetchOptions<T> {
     cache?: 'force-cache' | 'no-cache' | 'swr'
     expressGetter?: (data: T) => void
+    ttl?: number
 }
 
 export class Api {
@@ -55,10 +56,17 @@ export class Api {
 
         let cached: T | null = null
         if (opts?.cache !== 'no-cache') {
-            cached = await this.cache.get<T>(cacheKey)
-            if (cached) {
-                opts?.expressGetter?.(cached)
-                if (opts?.cache !== 'swr' && !opts?.expressGetter) return cached
+            const cachedEntry = await this.cache.get<T>(cacheKey)
+            if (cachedEntry) {
+                opts?.expressGetter?.(cachedEntry.data)
+
+                const age = Date.now() - cachedEntry.timestamp
+                if (age > (opts?.ttl ?? Infinity)) {
+                    this.cache.invalidate(cacheKey)
+                } else {
+                    cached = cachedEntry.data
+                    if (opts?.cache !== 'swr') return cachedEntry.data
+                }
             }
         }
         if (opts?.cache === 'force-cache') return null
