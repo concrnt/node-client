@@ -10,18 +10,6 @@ class DomainOfflineError extends Error {
     }
 }
 
-class InvalidKeyError extends Error {
-    constructor() {
-        super('Invalid key')
-    }
-}
-
-// Todo
-// - cacheレイヤーを注入できるようにする
-// - クレデンシャルを注入できるようにする (ログインユーザー/ゲスト)
-// ドメインがオフライン時の処理(リトライ)
-// キャッシュの有効期限
-
 export interface ApiResponse<T> {
     content: T
     status: 'ok' | 'error'
@@ -47,6 +35,29 @@ export class Api {
         this.authProvider = authProvider
     }
 
+    private isHostOnline = async (host: string): Promise<boolean> => {
+        const cacheKey = `online:${host}`
+        const entry = await this.cache.get<number>(cacheKey)
+        if (entry) {
+            const age = Date.now() - entry.timestamp
+            const threshold = 500 * Math.pow(1.5, Math.min(entry.data, 15))
+            if (age < threshold) {
+                return false
+            }
+        }
+        return true
+    }
+
+    private markHostOnline = async (host: string) => {
+        const cacheKey = `online:${host}`
+        this.cache.invalidate(cacheKey)
+    }
+
+    private markHostOffline = async (host: string) => {
+        const cacheKey = `online:${host}`
+        const failCount = (await this.cache.get<number>(cacheKey))?.data ?? 0
+        this.cache.set(cacheKey, failCount + 1)
+    }
 
     // Gets
     private async fetchResource<T>(
@@ -74,13 +85,18 @@ export class Api {
         if (opts?.cache === 'force-cache') return null
 
         const fetchNetwork = async (): Promise<T | null> => {
-            const url = `https://${host || this.host}${path}`
+            const fetchHost = host || this.host
+            const url = `https://${fetchHost}${path}`
+
+            if (!(await this.isHostOnline(fetchHost))) {
+                return Promise.reject(new DomainOfflineError(fetchHost))
+            }
 
             if (this.inFlightRequests.has(cacheKey)) {
                 return this.inFlightRequests.get(cacheKey)
             }
 
-            const authHeaders = await this.authProvider.getHeaders(host)
+            const authHeaders = await this.authProvider.getHeaders(fetchHost)
 
             const requestOptions = {
                 method: 'GET',
@@ -92,10 +108,17 @@ export class Api {
             
             const req = fetch(url, requestOptions).then(async (res) => {
 
+                if ([502, 503, 504].includes(res.status)) {
+                    await this.markHostOffline(fetchHost)
+                    return await Promise.reject(new DomainOfflineError(fetchHost))
+                }
+
                 if (!res.ok) {
                     if (res.status === 404) return null 
                     return await Promise.reject(new Error(`fetch failed on transport: ${res.status} ${await res.text()}`))
                 }
+
+                this.markHostOnline(fetchHost)
 
                 const data: ApiResponse<T> = await res.json()
                 if (data.status != 'ok') {
@@ -106,9 +129,26 @@ export class Api {
                 this.cache.set(cacheKey, data.content)
 
                 return data.content
+
+            }).catch(async (err) => {
+
+                if (err instanceof DomainOfflineError) {
+                    return Promise.reject(err)
+                }
+
+                if (['ENOTFOUND', 'ECONNREFUSED'].includes(err.cause?.code)) {
+                    await this.markHostOffline(fetchHost)
+                    return Promise.reject(new DomainOfflineError(fetchHost))
+                }
+
+                return Promise.reject(err)
+
             }).finally(() => {
+
                 this.inFlightRequests.delete(cacheKey)
+
             })
+
             this.inFlightRequests.set(cacheKey, req)
 
             return req
