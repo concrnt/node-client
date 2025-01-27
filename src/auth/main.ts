@@ -51,9 +51,14 @@ export class MasterKeyAuthProvider implements AuthProvider {
 
     async getPassport(): Promise<string> {
 
+        let credential = this.tokens[this.host]
+        if (!credential || !CheckJwtIsValid(credential)) {
+            if (this.privatekey) credential = this.generateApiToken(this.host)
+        }
+
         return await fetch(`https://${this.host}/api/v1/auth/passport`, {
             method: 'GET',
-            headers: {}
+            headers: { authorization: `Bearer ${credential}` }
         })
             .then(async (res) => await res.json())
             .then((data) => {
@@ -131,9 +136,14 @@ export class SubKeyAuthProvider implements AuthProvider {
 
     async getPassport(): Promise<string> {
 
+        let credential = this.tokens[this.host]
+        if (!credential || !CheckJwtIsValid(credential)) {
+            if (this.privatekey) credential = this.generateApiToken(this.host)
+        }
+
         return await fetch(`https://${this.host}/api/v1/auth/passport`, {
             method: 'GET',
-            headers: {}
+            headers: { authorization: `Bearer ${credential}` }
         })
             .then(async (res) => await res.json())
             .then((data) => {
