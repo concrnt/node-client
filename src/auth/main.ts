@@ -9,6 +9,7 @@ export interface AuthProvider {
     getCKID: () => string | undefined;
     getHeaders: (domain: string) => Promise<Record<string, string>>;
     getPassport: () => Promise<string>;
+    getHost: () => string;
 
     sign(data: string): string;
 }
@@ -91,6 +92,10 @@ export class MasterKeyAuthProvider implements AuthProvider {
 
     getCKID() {
         return undefined
+    }
+
+    getHost() {
+        return this.host
     }
 
     sign(data: string): string {
@@ -178,6 +183,10 @@ export class SubKeyAuthProvider implements AuthProvider {
         return this.ckid
     }
 
+    getHost() {
+        return this.host
+    }
+
     sign(data: string): string {
         return Sign(this.privatekey, data)
     }
@@ -185,8 +194,12 @@ export class SubKeyAuthProvider implements AuthProvider {
 }
 
 export class GuestAuthProvider implements AuthProvider {
+
+    defaultHost = ''
     
-    constructor() {}
+    constructor(defaultHost: string) {
+        this.defaultHost = defaultHost
+    }
 
     async getHeaders(_domain: string) {
         return {};
@@ -202,6 +215,10 @@ export class GuestAuthProvider implements AuthProvider {
 
     getPassport(): never {
         throw new Error("Method not implemented.");
+    }
+
+    getHost(): string {
+        return this.defaultHost
     }
 
     sign(_data: string): never {

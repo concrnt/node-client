@@ -20,6 +20,7 @@ export const IsCKID = (str: string): boolean => {
 export type Schema = string
 
 export type TimelineID    = string
+export type SubscriptionID = string
 export type MessageID     = string
 export type AssociationID = string
 export type ProfileID     = string
@@ -132,6 +133,30 @@ export namespace CCDocument {
 
 // -- core --
 
+export class Entity {
+    ccid: CCID = ''
+    alias?: string
+    tag: string = ''
+    domain: FQDN = ''
+    cdate: string = ''
+    score: number = 0
+
+    affiliationDocument: string = ''
+    affiliationSignature: string = ''
+
+    tombstoneDocument?: string
+    tombstoneSignature?: string
+
+    getAffiliationDocument(): CCDocument.Affiliation {
+        return JSON.parse(this.affiliationDocument)
+    }
+
+    getTombstoneDocument(): CCDocument.Delete | undefined {
+        if (!this.tombstoneDocument) return undefined
+        return JSON.parse(this.tombstoneDocument)
+    }
+}
+
 export class Message<T> {
     id: MessageID = ''
     author: CCID = ''
@@ -163,5 +188,120 @@ export class Association<T> {
         return JSON.parse(this.document)
     }
 }
-    
+
+export class Timeline<T> {
+    id: TimelineID = ''
+    indexable: boolean = false
+    owner: CCID | CSID = ''
+    author: CCID = ''
+    schema: string = ''
+    policy?: string
+    policyParams?: string
+    document: string = ''
+    signature: string = ''
+    cdate: string = ''
+    mdate: string = ''
+
+    getDocument(): CCDocument.Timeline<T> {
+        return JSON.parse(this.document)
+    }
+}
+
+export class TimelineItem {
+    resourceID: string = ''
+    timelineID: string = ''
+    author: string = ''
+    owner: string = ''
+    cdate: string = ''
+}
+
+export class Profile<T> {
+    id: ProfileID = ''
+    author: CCID = ''
+    schema: string = ''
+    document: string = ''
+    signature: string = ''
+    cdate: string = ''
+
+    associations: Association<any>[] = []
+
+    getDocument(): CCDocument.Profile<T> {
+        return JSON.parse(this.document)
+    }
+}
+
+export class Subscription<T> {
+    id: string = ''
+    author: CCID = ''
+    owner: CCID | CSID = ''
+    indexable: boolean = false
+    schema: string = ''
+    policy?: string
+    policyParams?: string
+    document: string = ''
+    signature: string = ''
+    items: SubscriptionItem[] = []
+    cdate: string = ''
+    mdate: string = ''
+
+    getDocument(): CCDocument.Subscription<T> {
+        return JSON.parse(this.document)
+    }
+}
+
+export enum ResolverType {
+    Entity = 0,
+    Domain = 1,
+}
+
+export class SubscriptionItem {
+    id: string = ''
+    resolverType: ResolverType = ResolverType.Entity
+    entity: string = ''
+    domain: string = ''
+    subscription: string = ''
+}
+
+export class Ack {
+    from: CCID = ''
+    to: CCID = ''
+    document: string = ''
+    signature: string = ''
+
+    getDocument(): CCDocument.Ack {
+        return JSON.parse(this.document)
+    }
+}
+
+export class Domain {
+    fqdn: FQDN = ''
+    ccid: CCID = ''
+    tag: string = ''
+    pubkey: string = ''
+    cdate: string = ''
+    score: number = 0
+    meta: Record<string, any> = {}
+}
+
+export class Key {
+    id: CKID = ''
+    root: CCID = ''
+    parent: CKID | CCID = ''
+    enactDocument: string = ''
+    enactSignature: string = ''
+    revokeDocument?: string
+    revokeSignature?: string
+    validSince: string = ''
+    validUntil: string = ''
+
+    getEnactDocument(): CCDocument.Enact {
+        return JSON.parse(this.enactDocument)
+    }
+
+    getRevokeDocument(): CCDocument.Revoke | undefined {
+        if (!this.revokeDocument) return undefined
+        return JSON.parse(this.revokeDocument)
+    }
+}
+
 
