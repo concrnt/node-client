@@ -274,6 +274,10 @@ export class Api {
         return await this.fetchWithCache(host, path, cacheKey, opts)
     }
 
+    invalidateMessage(id: string) {
+        this.cache.invalidate(`message:${id}`)
+    }
+
     async getMessageWithAuthor(messageId: string, author: string, hint?: string): Promise<Message<any> | null> {
         const host = await this.resolveDomain(author, hint)
         if (!host) return null
@@ -304,6 +308,33 @@ export class Api {
         return await this.getMessageAssociations(id, host)
     }
 
+
+    async getMessageAssociationsByTarget<T>(target: string, targetAuthor: string, filter: {schema?: string, variant?: string} = {}): Promise<Association<T>[]> {
+        let requestPath = `${apiPath}/message/${target}/associations`
+        if (filter.schema) requestPath += `?schema=${encodeURIComponent(filter.schema)}`
+        if (filter.variant) requestPath += `&variant=${encodeURIComponent(filter.variant)}`
+
+        const host = await this.resolveDomain(targetAuthor)
+        if (!host) throw new Error('domain not found')
+
+        return await this.fetchWithAuth<Association<T>[]>(host, requestPath) ?? []
+    }
+
+    async getAssociation<T>(id: string, host: string = ''): Promise<Association<T> | null> {
+        const cacheKey = `association:${id}`
+        const path = `${apiPath}/association/${id}`
+        return await this.fetchWithCache<Association<T>>(host, path, cacheKey)
+    }
+
+    invalidateAssociation(id: string) {
+        this.cache.invalidate(`association:${id}`)
+    }
+
+    async getAssociationWithOwner<T>(id: string, owner: string): Promise<Association<T> | null> {
+        const host = (await this.resolveDomain(owner)) ?? this.defaultHost
+        return await this.getAssociation(id, host)
+    }
+
     // GET:/api/v1/profile/:id
     async getProfile<T>(id: string, host: string = ''): Promise<Profile<T> | null> {
         const cacheKey = `profile:${id}`
@@ -311,8 +342,12 @@ export class Api {
         return await this.fetchWithCache<Profile<T>>(host, path, cacheKey)
     }
 
+    invalidateProfile(id: string) {
+        this.cache.invalidate(`profile:${id}`)
+    }
+
     async getProfileBySemanticID<T>(semanticID: string, owner: string): Promise<Profile<T> | null> {
-        const cacheKey = `profile:${semanticID}`
+        const cacheKey = `profile:${semanticID}@${owner}`
         const path = `${apiPath}/profile/${semanticID}`
 
         const host = (await this.resolveDomain(owner)) ?? this.defaultHost
@@ -362,6 +397,10 @@ export class Api {
         return await this.fetchWithCache<any>(this.defaultHost, path, cacheKey)
     }
 
+    invalidateTimeline(id: string) {
+        this.cache.invalidate(`timeline:${id}`)
+    }
+
     async getTimelineRecent(timelines: string[]): Promise<TimelineItem[]> {
         const requestPath = `/timeline/recent?timelines=${timelines.join(',')}`
         return await this.fetchWithAuth<TimelineItem[]>(this.defaultHost, requestPath) ?? []
@@ -407,10 +446,18 @@ export class Api {
         return await this.fetchWithCache<Subscription<T>>(this.defaultHost, path, cacheKey)
     }
 
+    invalidateSubscription(id: string) {
+        this.cache.invalidate(`subscription:${id}`)
+    }
+
     async getDomain(remote: string): Promise<Domain | null> {
         const cacheKey = `domain:${remote}`
         const path = `${apiPath}/domain/${remote}`
         return await this.fetchWithCache<Domain>(this.defaultHost, path, cacheKey)
+    }
+
+    invalidateDomain(remote: string) {
+        this.cache.invalidate(`domain:${remote}`)
     }
 
     async getDomains(): Promise<Domain[]> {

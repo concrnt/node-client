@@ -178,6 +178,7 @@ export class Message<T> {
 export class Association<T> {
     id: AssociationID = ''
     author: CCID = ''
+    owner: CCID | CSID = ''
     schema: string = ''
     document: string = ''
     signature: string = ''
@@ -275,7 +276,7 @@ export class Ack {
 
 export class Domain {
     fqdn: FQDN = ''
-    ccid: CCID = ''
+    csid: CSID = ''
     tag: string = ''
     pubkey: string = ''
     cdate: string = ''
