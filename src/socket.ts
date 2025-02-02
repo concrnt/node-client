@@ -33,7 +33,7 @@ export class Socket {
             const event: TimelineEvent = JSON.parse(rawevent.data);
             Object.setPrototypeOf(event, TimelineEvent.prototype)
 
-            const document = event.getDocument()
+            const document = event.parsedDoc
             if (document) {
                 switch (document.type) { // TODO
                     case 'message':

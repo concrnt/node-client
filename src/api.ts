@@ -79,8 +79,65 @@ export class Api {
         this.cache.set(cacheKey, failCount + 1)
     }
 
+    async fetchWithCredentialBlob(
+        host: string,
+        path: string,
+        init: RequestInit = {}
+    ): Promise<Blob> {
+
+        const fetchNetwork = async (): Promise<Blob> => {
+            const fetchHost = host || this.defaultHost
+            const url = `https://${fetchHost}${path}`
+
+            if (!(await this.isHostOnline(fetchHost))) {
+                return Promise.reject(new DomainOfflineError(fetchHost))
+            }
+
+            const authHeaders = await this.authProvider.getHeaders(fetchHost)
+
+            init.headers = {
+                ...init.headers,
+                ...authHeaders
+            }
+            
+            const req = fetch(url, init).then(async (res) => {
+
+                if ([502, 503, 504].includes(res.status)) {
+                    await this.markHostOffline(fetchHost)
+                    return await Promise.reject(new DomainOfflineError(fetchHost))
+                }
+
+                if (!res.ok) {
+                    return await Promise.reject(new Error(`fetch failed on transport: ${res.status} ${await res.text()}`))
+                }
+
+                this.markHostOnline(fetchHost)
+
+                return await res.blob()
+
+            }).catch(async (err) => {
+
+                if (err instanceof DomainOfflineError) {
+                    return Promise.reject(err)
+                }
+
+                if (['ENOTFOUND', 'ECONNREFUSED'].includes(err.cause?.code)) {
+                    await this.markHostOffline(fetchHost)
+                    return Promise.reject(new DomainOfflineError(fetchHost))
+                }
+
+                return Promise.reject(err)
+
+            })
+
+            return req
+        }
+
+        return await fetchNetwork()
+    }
+
     // Gets
-    async fetchWithAuth<T>(
+    async fetchWithCredential<T>(
         host: string,
         path: string,
         init: RequestInit = {}
@@ -262,7 +319,7 @@ export class Api {
 
     async getEntities(): Promise<Entity[]> {
         const requestPath = `${apiPath}/entities`
-        return await this.fetchWithAuth<Entity[]>(this.defaultHost, requestPath) ?? []
+        return await this.fetchWithCredential<Entity[]>(this.defaultHost, requestPath) ?? []
     }
 
     async resolveDomain(ccid: string, hint?: string): Promise<string | null> {
@@ -270,6 +327,10 @@ export class Api {
         if (!entity) return null
 
         return entity.domain
+    }
+
+    invalidateEntity(ccid: string) {
+        this.cache.invalidate(`entity:${ccid}`)
     }
 
     // GET:/api/v1/message/:id
@@ -298,13 +359,13 @@ export class Api {
         const host = await this.resolveDomain(targetAuthor)
         if (!host) throw new Error('domain not found')
 
-        return await this.fetchWithAuth<Record<string, number>>(host, requestPath) ?? {}
+        return await this.fetchWithCredential<Record<string, number>>(host, requestPath) ?? {}
     }
 
     // GET:/api/v1/message/:id/associations
     async getMessageAssociations<T>(id: string, host: string = ''): Promise<Association<T>[]> {
         const path = `${apiPath}/message/${id}/associations`
-        return await this.fetchWithAuth<Association<T>[]>(host, path) ?? []
+        return await this.fetchWithCredential<Association<T>[]>(host, path) ?? []
     }
 
     // GET:/api/v1/message/:id/associations
@@ -322,7 +383,7 @@ export class Api {
         const host = await this.resolveDomain(targetAuthor)
         if (!host) throw new Error('domain not found')
 
-        return await this.fetchWithAuth<Association<T>[]>(host, requestPath) ?? []
+        return await this.fetchWithCredential<Association<T>[]>(host, requestPath) ?? []
     }
 
     async getAssociation<T>(id: string, host: string = ''): Promise<Association<T> | null> {
@@ -393,7 +454,7 @@ export class Api {
     async getTimelineListBySchema<T>(schema: string, remote?: string): Promise<Timeline<T>[]> {
         const requestPath = `/timelines?schema=${encodeURIComponent(schema)}`
         const host = remote ?? this.defaultHost
-        return await this.fetchWithAuth<Timeline<T>[]>(host, requestPath) ?? []
+        return await this.fetchWithCredential<Timeline<T>[]>(host, requestPath) ?? []
     }
 
     async getTimeline<T>(id: string): Promise<Timeline<T> | null> {
@@ -408,7 +469,7 @@ export class Api {
 
     async getTimelineRecent(timelines: string[]): Promise<TimelineItem[]> {
         const requestPath = `/timeline/recent?timelines=${timelines.join(',')}`
-        return await this.fetchWithAuth<TimelineItem[]>(this.defaultHost, requestPath) ?? []
+        return await this.fetchWithCredential<TimelineItem[]>(this.defaultHost, requestPath) ?? []
     }
 
 
@@ -424,7 +485,7 @@ export class Api {
         if (limit) queries.push(`limit=${limit}`)
 
         const requestPath = apiPath + queries.join('&')
-        return await this.fetchWithAuth<TimelineItem[]>(host, requestPath) ?? []
+        return await this.fetchWithCredential<TimelineItem[]>(host, requestPath) ?? []
     }
 
     async getTimelineRanged(timelines: string[], param: {until?: Date, since?: Date}): Promise<TimelineItem[]> {
@@ -433,7 +494,7 @@ export class Api {
         const untilQuery = !param.until ? '' : `&until=${Math.ceil(param.until.getTime()/1000)}`
 
         const requestPath = `/timeline/range?timelines=${timelines.join(',')}${sinceQuery}${untilQuery}`
-        return await this.fetchWithAuth<TimelineItem[]>(this.defaultHost, requestPath) ?? []
+        return await this.fetchWithCredential<TimelineItem[]>(this.defaultHost, requestPath) ?? []
 
     }
 
@@ -442,13 +503,18 @@ export class Api {
         const host = await this.resolveTimelineHost(id)
 
         const requestPath = `/timeline/${id}/associations`
-        return await this.fetchWithAuth<Association<any>[]>(host, requestPath) ?? []
+        return await this.fetchWithCredential<Association<any>[]>(host, requestPath) ?? []
     }
 
     async getSubscription<T>(id: string): Promise<Subscription<T> | null> {
         const cacheKey = `subscription:${id}`
         const path = `${apiPath}/subscription/${id}`
         return await this.fetchWithCache<Subscription<T>>(Subscription, this.defaultHost, path, cacheKey)
+    }
+
+    async getOwnSubscriptions<T>(): Promise<Subscription<T>[]> {
+        const requestPath = `${apiPath}/subscriptions/mine`
+        return await this.fetchWithCredential<Subscription<T>[]>(this.defaultHost, requestPath) ?? []
     }
 
     invalidateSubscription(id: string) {
@@ -467,30 +533,30 @@ export class Api {
 
     async getDomains(): Promise<Domain[]> {
         const requestPath = `${apiPath}/domains`
-        return await this.fetchWithAuth<Domain[]>(this.defaultHost, requestPath) ?? []
+        return await this.fetchWithCredential<Domain[]>(this.defaultHost, requestPath) ?? []
     }
 
     async getAcking(ccid: string): Promise<Ack[]> {
         const host = (await this.resolveDomain(ccid)) ?? this.defaultHost
         const requestPath = `${apiPath}/entity/${ccid}/acking`
-        return await this.fetchWithAuth<Ack[]>(host, requestPath) ?? []
+        return await this.fetchWithCredential<Ack[]>(host, requestPath) ?? []
     }
 
     async getAcker(ccid: string): Promise<Ack[]> {
         const host = (await this.resolveDomain(ccid)) ?? this.defaultHost
         const requestPath = `${apiPath}/entity/${ccid}/acker`
-        return await this.fetchWithAuth<Ack[]>(host, requestPath) ?? []
+        return await this.fetchWithCredential<Ack[]>(host, requestPath) ?? []
     }
 
     async getKeyList(): Promise<Key[]> {
         const requestPath = `${apiPath}/keys/mine`
-        return await this.fetchWithAuth<Key[]>(this.defaultHost, requestPath) ?? []
+        return await this.fetchWithCredential<Key[]>(this.defaultHost, requestPath) ?? []
     }
 
     async getKeyResolution(ckid: CKID, owner: CCID): Promise<Key[]> {
         const host = (await this.resolveDomain(owner)) ?? this.defaultHost
         const requestPath = `${apiPath}/key/${ckid}`
-        return await this.fetchWithAuth<Key[]>(host, requestPath) ?? []
+        return await this.fetchWithCredential<Key[]>(host, requestPath) ?? []
     }
 
     // Posts
@@ -874,13 +940,13 @@ export class Api {
     }
 
     async getKV(key: string): Promise<string | null | undefined> {
-        return await this.fetchWithAuth(this.defaultHost, `${apiPath}/kv/${key}`, {
+        return await this.fetchWithCredential(this.defaultHost, `${apiPath}/kv/${key}`, {
             method: 'GET',
         })
     }
 
     async writeKV(key: string, value: string): Promise<void> {
-        await this.fetchWithAuth(this.defaultHost, `${apiPath}/kv/${key}`, {
+        await this.fetchWithCredential(this.defaultHost, `${apiPath}/kv/${key}`, {
             method: 'PUT',
             body: value
         })

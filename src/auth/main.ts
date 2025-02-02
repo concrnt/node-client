@@ -8,6 +8,7 @@ export interface AuthProvider {
     getCCID: () => string;
     getCKID: () => string | undefined;
     getHeaders: (domain: string) => Promise<Record<string, string>>;
+    getAuthToken: (domain: string) => string;
     getPassport: () => Promise<string>;
     getHost: () => string;
 
@@ -50,16 +51,19 @@ export class MasterKeyAuthProvider implements AuthProvider {
         return token
     }
 
-    async getPassport(): Promise<string> {
-
-        let credential = this.tokens[this.host]
-        if (!credential || !CheckJwtIsValid(credential)) {
-            if (this.privatekey) credential = this.generateApiToken(this.host)
+    getAuthToken(remote: string): string {
+        let token = this.tokens[remote]
+        if (!token || !CheckJwtIsValid(token)) {
+            if (this.privatekey) token = this.generateApiToken(remote)
         }
+        return token
+    }
+
+    async getPassport(): Promise<string> {
 
         return await fetch(`https://${this.host}/api/v1/auth/passport`, {
             method: 'GET',
-            headers: { authorization: `Bearer ${credential}` }
+            headers: { authorization: `Bearer ${this.getAuthToken(this.host)}` }
         })
             .then(async (res) => await res.json())
             .then((data) => {
@@ -70,18 +74,13 @@ export class MasterKeyAuthProvider implements AuthProvider {
 
     async getHeaders(domain: string) {
 
-        let credential = this.tokens[domain]
-        if (!credential || !CheckJwtIsValid(credential)) {
-            if (this.privatekey) credential = this.generateApiToken(domain)
-        }
-
         let passport = this.passport
         if (!passport) {
             passport = await this.getPassport()
         }
 
         return {
-            authorization: `Bearer ${credential}`,
+            authorization: `Bearer ${this.getAuthToken(domain)}`,
             passport: passport
         };
     }
@@ -139,16 +138,19 @@ export class SubKeyAuthProvider implements AuthProvider {
         return token
     }
 
-    async getPassport(): Promise<string> {
-
-        let credential = this.tokens[this.host]
-        if (!credential || !CheckJwtIsValid(credential)) {
-            if (this.privatekey) credential = this.generateApiToken(this.host)
+    getAuthToken(remote: string): string {
+        let token = this.tokens[remote]
+        if (!token || !CheckJwtIsValid(token)) {
+            if (this.privatekey) token = this.generateApiToken(remote)
         }
+        return token
+    }
+
+    async getPassport(): Promise<string> {
 
         return await fetch(`https://${this.host}/api/v1/auth/passport`, {
             method: 'GET',
-            headers: { authorization: `Bearer ${credential}` }
+            headers: { authorization: `Bearer ${this.getAuthToken(this.host)}` }
         })
             .then(async (res) => await res.json())
             .then((data) => {
@@ -159,18 +161,13 @@ export class SubKeyAuthProvider implements AuthProvider {
 
     async getHeaders(domain: string) {
 
-        let credential = this.tokens[domain]
-        if (!credential || !CheckJwtIsValid(credential)) {
-            if (this.privatekey) credential = this.generateApiToken(domain)
-        }
-
         let passport = this.passport
         if (!passport) {
             passport = await this.getPassport()
         }
 
         return {
-            authorization: `Bearer ${credential}`,
+            authorization: `Bearer ${this.getAuthToken(domain)}`,
             passport: passport
         };
     }
@@ -203,6 +200,10 @@ export class GuestAuthProvider implements AuthProvider {
 
     async getHeaders(_domain: string) {
         return {};
+    }
+
+    getAuthToken(_domain: string): string {
+        throw new Error("Method not implemented.");
     }
 
     getCCID(): never {

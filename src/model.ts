@@ -147,11 +147,11 @@ export class Entity {
     tombstoneDocument?: string
     tombstoneSignature?: string
 
-    getAffiliationDocument(): CCDocument.Affiliation {
+   get parsedAffiliationDoc(): CCDocument.Affiliation {
         return JSON.parse(this.affiliationDocument)
     }
 
-    getTombstoneDocument(): CCDocument.Delete | undefined {
+    get parsedTombstoneDoc(): CCDocument.Delete | undefined {
         if (!this.tombstoneDocument) return undefined
         return JSON.parse(this.tombstoneDocument)
     }
@@ -170,9 +170,15 @@ export class Message<T> {
     ownAssociations: Association<any>[] = []
     cdate: string = ''
 
-    getDocument(): CCDocument.Message<T> {
+    get parsedDoc(): CCDocument.Message<T> {
         return JSON.parse(this.document)
     }
+
+    get parsedPolicy(): any {
+        if (!this.policy) return {}
+        return JSON.parse(this.policy)
+    }
+
 }
 
 export class Association<T> {
@@ -185,7 +191,7 @@ export class Association<T> {
     target: MessageID = ''
     cdate: string = ''
 
-    getDocument(): CCDocument.Association<T> {
+    get parsedDoc(): CCDocument.Association<T> {
         return JSON.parse(this.document)
     }
 }
@@ -203,9 +209,9 @@ export class Timeline<T> {
     cdate: string = ''
     mdate: string = ''
 
-    getDocument(): CCDocument.Timeline<T> {
-        return JSON.parse(this.document)
-    }
+   get parsedDoc(): CCDocument.Timeline<T> {
+       return JSON.parse(this.document)
+   }
 }
 
 export class TimelineItem {
@@ -226,7 +232,7 @@ export class Profile<T> {
 
     associations: Association<any>[] = []
 
-    getDocument(): CCDocument.Profile<T> {
+    get parsedDoc(): CCDocument.Profile<T> {
         return JSON.parse(this.document)
     }
 }
@@ -245,7 +251,7 @@ export class Subscription<T> {
     cdate: string = ''
     mdate: string = ''
 
-    getDocument(): CCDocument.Subscription<T> {
+    get parsedDoc(): CCDocument.Subscription<T> {
         return JSON.parse(this.document)
     }
 }
@@ -269,7 +275,7 @@ export class Ack {
     document: string = ''
     signature: string = ''
 
-    getDocument(): CCDocument.Ack {
+    get parsedDoc(): CCDocument.Ack {
         return JSON.parse(this.document)
     }
 }
@@ -295,11 +301,11 @@ export class Key {
     validSince: string = ''
     validUntil: string = ''
 
-    getEnactDocument(): CCDocument.Enact {
+    get parsedEnactDoc(): CCDocument.Enact {
         return JSON.parse(this.enactDocument)
     }
 
-    getRevokeDocument(): CCDocument.Revoke | undefined {
+    get parsedRevokeDoc(): CCDocument.Revoke | undefined {
         if (!this.revokeDocument) return undefined
         return JSON.parse(this.revokeDocument)
     }
@@ -314,7 +320,7 @@ export class TimelineEvent {
     resource?: Message<any> | Association<any>
     signature: string = ''
 
-    getDocument(): CCDocument.Message<any> | CCDocument.Association<any> | CCDocument.Delete {
+    get parsedDoc(): CCDocument.Message<any> | CCDocument.Association<any> | CCDocument.Delete {
         return JSON.parse(this.document)
     }
 }
