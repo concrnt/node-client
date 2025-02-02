@@ -305,4 +305,18 @@ export class Key {
     }
 }
 
+// -- other --
+
+export class TimelineEvent {
+    timeline: TimelineID = ''
+    item: TimelineItem | undefined = undefined
+    document: string = ''
+    resource?: Message<any> | Association<any>
+    signature: string = ''
+
+    getDocument(): CCDocument.Message<any> | CCDocument.Association<any> | CCDocument.Delete {
+        return JSON.parse(this.document)
+    }
+}
+
 
