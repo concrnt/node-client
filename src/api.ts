@@ -146,6 +146,7 @@ export class Api {
 
 
     async fetchWithCache<T>(
+        cls: new () => T extends (infer U)[] ? U : T,
         host: string,
         path: string,
         cacheKey: string,
@@ -213,7 +214,11 @@ export class Api {
                 opts?.expressGetter?.(data.content)
                 this.cache.set(cacheKey, data.content)
 
-                return data.content
+                if (Array.isArray(data.content)) {
+                    return data.content.map((item) => Object.setPrototypeOf(item, cls.prototype))
+                } else {
+                    return Object.setPrototypeOf(data.content, cls.prototype)
+                }
 
             }).catch(async (err) => {
 
@@ -252,7 +257,7 @@ export class Api {
         const cacheKey = `entity:${ccid}`
         const path = `${apiPath}/entity/${ccid}`
         console.log('getEntity', path)
-        return await this.fetchWithCache(host, path, cacheKey, opts)
+        return await this.fetchWithCache(Entity, host, path, cacheKey, opts)
     }
 
     async getEntities(): Promise<Entity[]> {
@@ -271,7 +276,7 @@ export class Api {
     async getMessage<T>(id: string, host: string = '', opts?: FetchOptions<Message<T>>): Promise<Message<T> | null> {
         const cacheKey = `message:${id}`
         const path = `${apiPath}/message/${id}`
-        return await this.fetchWithCache(host, path, cacheKey, opts)
+        return await this.fetchWithCache(Message, host, path, cacheKey, opts)
     }
 
     invalidateMessage(id: string) {
@@ -323,7 +328,7 @@ export class Api {
     async getAssociation<T>(id: string, host: string = ''): Promise<Association<T> | null> {
         const cacheKey = `association:${id}`
         const path = `${apiPath}/association/${id}`
-        return await this.fetchWithCache<Association<T>>(host, path, cacheKey)
+        return await this.fetchWithCache<Association<T>>(Association, host, path, cacheKey)
     }
 
     invalidateAssociation(id: string) {
@@ -339,7 +344,7 @@ export class Api {
     async getProfile<T>(id: string, host: string = ''): Promise<Profile<T> | null> {
         const cacheKey = `profile:${id}`
         const path = `${apiPath}/profile/${id}`
-        return await this.fetchWithCache<Profile<T>>(host, path, cacheKey)
+        return await this.fetchWithCache<Profile<T>>(Profile, host, path, cacheKey)
     }
 
     invalidateProfile(id: string) {
@@ -351,7 +356,7 @@ export class Api {
         const path = `${apiPath}/profile/${semanticID}`
 
         const host = (await this.resolveDomain(owner)) ?? this.defaultHost
-        return await this.fetchWithCache<Profile<T>>(host, path, cacheKey)
+        return await this.fetchWithCache<Profile<T>>(Profile, host, path, cacheKey)
     }
 
     async getProfiles<T>(query: {author?: string, schema?: string, since?: number, until?: number, limit?: number, domain?: string}): Promise<Profile<T>[]> {
@@ -369,7 +374,7 @@ export class Api {
 
         const targetHost = query.domain ?? (query.author && await this.resolveDomain(query.author)) ?? this.defaultHost
 
-        return await this.fetchWithCache<Profile<T>[]>(targetHost, requestPath, `profiles:${queries.join(':')}`) ?? []
+        return await this.fetchWithCache<Profile<T>[]>(Profile, targetHost, requestPath, `profiles:${queries.join(':')}`) ?? []
     }
 
     async resolveTimelineHost(timeline: string): Promise<string> {
@@ -391,10 +396,10 @@ export class Api {
         return await this.fetchWithAuth<Timeline<T>[]>(host, requestPath) ?? []
     }
 
-    async getTimeline(id: string): Promise<Timeline<any> | null> {
+    async getTimeline<T>(id: string): Promise<Timeline<T> | null> {
         const cacheKey = `timeline:${id}`
         const path = `${apiPath}/timeline/${id}`
-        return await this.fetchWithCache<any>(this.defaultHost, path, cacheKey)
+        return await this.fetchWithCache<Timeline<T>>(Timeline, this.defaultHost, path, cacheKey)
     }
 
     invalidateTimeline(id: string) {
@@ -443,7 +448,7 @@ export class Api {
     async getSubscription<T>(id: string): Promise<Subscription<T> | null> {
         const cacheKey = `subscription:${id}`
         const path = `${apiPath}/subscription/${id}`
-        return await this.fetchWithCache<Subscription<T>>(this.defaultHost, path, cacheKey)
+        return await this.fetchWithCache<Subscription<T>>(Subscription, this.defaultHost, path, cacheKey)
     }
 
     invalidateSubscription(id: string) {
@@ -453,7 +458,7 @@ export class Api {
     async getDomain(remote: string): Promise<Domain | null> {
         const cacheKey = `domain:${remote}`
         const path = `${apiPath}/domain/${remote}`
-        return await this.fetchWithCache<Domain>(this.defaultHost, path, cacheKey)
+        return await this.fetchWithCache<Domain>(Domain, this.defaultHost, path, cacheKey)
     }
 
     invalidateDomain(remote: string) {
@@ -524,7 +529,7 @@ export class Api {
         body: T,
         timelines: TimelineID[],
         { policy = undefined, policyParams = undefined, policyDefaults = undefined }: { policy?: string, policyParams?: string, policyDefaults?: string } = {}
-    ): Promise<any> {
+    ): Promise<Message<T>> {
 
         const ccid = this.authProvider.getCCID()
 
@@ -540,7 +545,7 @@ export class Api {
             policyDefaults
         }
 
-        return await this.commit(documentObj)
+        return await this.commit<Message<T>>(documentObj)
     }
 
     async createAssociation<T>(
@@ -550,7 +555,7 @@ export class Api {
         targetAuthor: CCID,
         timelines: TimelineID[],
         variant: string = ''
-    ) {
+    ): Promise<Association<T>> {
 
         const ccid = this.authProvider.getCCID()
 
@@ -566,7 +571,7 @@ export class Api {
             signedAt: new Date()
         }
 
-        return await this.commit(documentObj)
+        return await this.commit<Association<T>>(documentObj)
     }
 
     async upsertProfile<T>(
@@ -589,7 +594,7 @@ export class Api {
             policyParams,
         }
 
-        return await this.commit(documentObj)
+        return await this.commit<Profile<T>>(documentObj)
     }
 
     async upsertTimeline<T>(
@@ -625,7 +630,7 @@ export class Api {
             policyParams,
         }
 
-        return await this.commit(documentObj, host)
+        return await this.commit<Timeline<T>>(documentObj, host)
     }
 
     async retractItem(timeline: string, item: string): Promise<any> {
@@ -666,7 +671,7 @@ export class Api {
             policyParams
         }
 
-        return await this.commit(documentObj)
+        return await this.commit<Subscription<T>>(documentObj)
     }
 
     async subscribe(target: string, subscription: string): Promise<any> {
