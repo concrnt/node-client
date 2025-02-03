@@ -141,9 +141,9 @@ export class Api {
         host: string,
         path: string,
         init: RequestInit = {}
-    ): Promise<T | null> {
+    ): Promise<T> {
 
-        const fetchNetwork = async (): Promise<T | null> => {
+        const fetchNetwork = async (): Promise<T> => {
             const fetchHost = host || this.defaultHost
             const url = `https://${fetchHost}${path}`
 
@@ -167,7 +167,6 @@ export class Api {
                 }
 
                 if (!res.ok) {
-                    if (res.status === 404) return null 
                     return await Promise.reject(new Error(`fetch failed on transport: ${res.status} ${await res.text()}`))
                 }
 
@@ -208,12 +207,13 @@ export class Api {
         path: string,
         cacheKey: string,
         opts?: FetchOptions<T>
-    ): Promise<T | null> {
+    ): Promise<T> {
 
         let cached: T | null = null
         if (opts?.cache !== 'no-cache') {
             const cachedEntry = await this.cache.get<T>(cacheKey)
             if (cachedEntry) {
+                Object.setPrototypeOf(cachedEntry?.data, cls.prototype)
                 opts?.expressGetter?.(cachedEntry.data)
 
                 const age = Date.now() - cachedEntry.timestamp
@@ -225,9 +225,9 @@ export class Api {
                 }
             }
         }
-        if (opts?.cache === 'force-cache') return null
+        if (opts?.cache === 'force-cache') throw new Error('cache not found')
 
-        const fetchNetwork = async (): Promise<T | null> => {
+        const fetchNetwork = async (): Promise<T> => {
             const fetchHost = host || this.defaultHost
             const url = `https://${fetchHost}${path}`
 
@@ -310,10 +310,9 @@ export class Api {
     }
 
     // GET:/api/v1/entity/:ccid
-    async getEntity(ccid: string, host: string = '', opts?: FetchOptions<Entity>): Promise<Entity | null> {
+    async getEntity(ccid: string, host: string = '', opts?: FetchOptions<Entity>): Promise<Entity> {
         const cacheKey = `entity:${ccid}`
         const path = `${apiPath}/entity/${ccid}`
-        console.log('getEntity', path)
         return await this.fetchWithCache(Entity, host, path, cacheKey, opts)
     }
 
@@ -322,9 +321,9 @@ export class Api {
         return await this.fetchWithCredential<Entity[]>(this.defaultHost, requestPath) ?? []
     }
 
-    async resolveDomain(ccid: string, hint?: string): Promise<string | null> {
+    async resolveDomain(ccid: string, hint?: string): Promise<string> {
         const entity = await this.getEntity(ccid, hint)
-        if (!entity) return null
+        if (!entity) throw new Error('failed to resolve entity: ' + ccid)
 
         return entity.domain
     }
@@ -414,7 +413,7 @@ export class Api {
 
     async getProfileBySemanticID<T>(semanticID: string, owner: string): Promise<Profile<T> | null> {
         const cacheKey = `profile:${semanticID}@${owner}`
-        const path = `${apiPath}/profile/${semanticID}`
+        const path = `${apiPath}/profile/${owner}/${semanticID}`
 
         const host = (await this.resolveDomain(owner)) ?? this.defaultHost
         return await this.fetchWithCache<Profile<T>>(Profile, host, path, cacheKey)
@@ -422,7 +421,7 @@ export class Api {
 
     async getProfiles<T>(query: {author?: string, schema?: string, since?: number, until?: number, limit?: number, domain?: string}): Promise<Profile<T>[]> {
 
-        let requestPath = `/profiles?`
+        let requestPath = `${apiPath}/profiles?`
 
         let queries: string[] = []
         if (query.author) queries.push(`author=${query.author}`)
@@ -435,7 +434,8 @@ export class Api {
 
         const targetHost = query.domain ?? (query.author && await this.resolveDomain(query.author)) ?? this.defaultHost
 
-        return await this.fetchWithCache<Profile<T>[]>(Profile, targetHost, requestPath, `profiles:${queries.join(':')}`) ?? []
+        const results = await this.fetchWithCredential<Profile<T>[]>(targetHost, requestPath)
+        return results.map((item) => Object.setPrototypeOf(item, Profile.prototype))
     }
 
     async resolveTimelineHost(timeline: string): Promise<string> {
@@ -460,7 +460,8 @@ export class Api {
     async getTimeline<T>(id: string): Promise<Timeline<T> | null> {
         const cacheKey = `timeline:${id}`
         const path = `${apiPath}/timeline/${id}`
-        return await this.fetchWithCache<Timeline<T>>(Timeline, this.defaultHost, path, cacheKey)
+        const host = await this.resolveTimelineHost(id)
+        return await this.fetchWithCache<Timeline<T>>(Timeline, host, path, cacheKey)
     }
 
     invalidateTimeline(id: string) {
@@ -468,15 +469,16 @@ export class Api {
     }
 
     async getTimelineRecent(timelines: string[]): Promise<TimelineItem[]> {
-        const requestPath = `/timeline/recent?timelines=${timelines.join(',')}`
-        return await this.fetchWithCredential<TimelineItem[]>(this.defaultHost, requestPath) ?? []
+        const requestPath = `${apiPath}/timelines/recent?timelines=${timelines.join(',')}`
+        const data = await this.fetchWithCredential<TimelineItem[]>(this.defaultHost, requestPath) ?? []
+        return data.map((item) => Object.setPrototypeOf(item, TimelineItem.prototype))
     }
 
 
     async queryTimeline(timeline: string, query: {schema?: string, owner?: string, author?: string }, until?: Date, limit?: number): Promise<TimelineItem[]> {
 
         const host = await this.resolveTimelineHost(timeline)
-        const apiPath = `/timeline/${timeline}/query?`
+        const basePath = `${apiPath}/timeline/${timeline}/query?`
         const queries: string[] = []
         if (query.schema) queries.push(`schema=${query.schema}`)
         if (query.owner) queries.push(`owner=${query.owner}`)
@@ -484,8 +486,9 @@ export class Api {
         if (until) queries.push(`until=${Math.ceil(until.getTime()/1000)}`)
         if (limit) queries.push(`limit=${limit}`)
 
-        const requestPath = apiPath + queries.join('&')
-        return await this.fetchWithCredential<TimelineItem[]>(host, requestPath) ?? []
+        const requestPath = basePath + queries.join('&')
+        const data = await this.fetchWithCredential<TimelineItem[]>(host, requestPath) ?? []
+        return data.map(item => Object.setPrototypeOf(item, TimelineItem.prototype))
     }
 
     async getTimelineRanged(timelines: string[], param: {until?: Date, since?: Date}): Promise<TimelineItem[]> {
@@ -493,8 +496,9 @@ export class Api {
         const sinceQuery = !param.since ? '' : `&since=${Math.floor(param.since.getTime()/1000)}`
         const untilQuery = !param.until ? '' : `&until=${Math.ceil(param.until.getTime()/1000)}`
 
-        const requestPath = `/timeline/range?timelines=${timelines.join(',')}${sinceQuery}${untilQuery}`
-        return await this.fetchWithCredential<TimelineItem[]>(this.defaultHost, requestPath) ?? []
+        const requestPath = `${apiPath}/timelines/range?timelines=${timelines.join(',')}${sinceQuery}${untilQuery}`
+        const data = await this.fetchWithCredential<TimelineItem[]>(this.defaultHost, requestPath) ?? []
+        return data.map(item => Object.setPrototypeOf(item, TimelineItem.prototype))
 
     }
 
@@ -506,7 +510,7 @@ export class Api {
         return await this.fetchWithCredential<Association<any>[]>(host, requestPath) ?? []
     }
 
-    async getSubscription<T>(id: string): Promise<Subscription<T> | null> {
+    async getSubscription<T>(id: string): Promise<Subscription<T>> {
         const cacheKey = `subscription:${id}`
         const path = `${apiPath}/subscription/${id}`
         return await this.fetchWithCache<Subscription<T>>(Subscription, this.defaultHost, path, cacheKey)
@@ -514,17 +518,18 @@ export class Api {
 
     async getOwnSubscriptions<T>(): Promise<Subscription<T>[]> {
         const requestPath = `${apiPath}/subscriptions/mine`
-        return await this.fetchWithCredential<Subscription<T>[]>(this.defaultHost, requestPath) ?? []
+        const data =  await this.fetchWithCredential<Subscription<T>[]>(this.defaultHost, requestPath)
+        return data.map((item) => Object.setPrototypeOf(item, Subscription.prototype))
     }
 
     invalidateSubscription(id: string) {
         this.cache.invalidate(`subscription:${id}`)
     }
 
-    async getDomain(remote: string): Promise<Domain | null> {
+    async getDomain(remote: string): Promise<Domain> {
         const cacheKey = `domain:${remote}`
-        const path = `${apiPath}/domain/${remote}`
-        return await this.fetchWithCache<Domain>(Domain, this.defaultHost, path, cacheKey)
+        const path = `${apiPath}/domain`
+        return await this.fetchWithCache<Domain>(Domain, remote, path, cacheKey)
     }
 
     invalidateDomain(remote: string) {

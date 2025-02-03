@@ -220,6 +220,10 @@ export class TimelineItem {
     author: string = ''
     owner: string = ''
     cdate: string = ''
+
+    get created(): Date {
+        return new Date(this.cdate)
+    }
 }
 
 export class Profile<T> {
@@ -315,7 +319,7 @@ export class Key {
 
 export class TimelineEvent {
     timeline: TimelineID = ''
-    item: TimelineItem | undefined = undefined
+    item: TimelineItem = new TimelineItem()
     document: string = ''
     resource?: Message<any> | Association<any>
     signature: string = ''

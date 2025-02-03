@@ -23,7 +23,7 @@ export class MasterKeyAuthProvider implements AuthProvider {
 
     ccid: string
 
-    passport?: string
+    passport?: Promise<string>
     tokens: Record<string, string> = {}
 
     constructor(privatekey: string, host: string) {
@@ -61,20 +61,21 @@ export class MasterKeyAuthProvider implements AuthProvider {
 
     async getPassport(): Promise<string> {
 
-        return await fetch(`https://${this.host}/api/v1/auth/passport`, {
+        this.passport = fetch(`https://${this.host}/api/v1/auth/passport`, {
             method: 'GET',
             headers: { authorization: `Bearer ${this.getAuthToken(this.host)}` }
         })
             .then(async (res) => await res.json())
             .then((data) => {
-                this.passport = data.content
                 return data.content
             })
+
+        return this.passport
     }
 
     async getHeaders(domain: string) {
 
-        let passport = this.passport
+        let passport = await this.passport
         if (!passport) {
             passport = await this.getPassport()
         }
@@ -110,7 +111,7 @@ export class SubKeyAuthProvider implements AuthProvider {
     ccid: string
     ckid: string
 
-    passport?: string
+    passport?: Promise<string>
     tokens: Record<string, string> = {}
 
     constructor(subkey: string) {
@@ -129,7 +130,7 @@ export class SubKeyAuthProvider implements AuthProvider {
 
         const token = IssueJWT(this.privatekey, {
             aud: remote,
-            iss: this.ccid,
+            iss: this.ckid,
             sub: 'concrnt',
         })
 
@@ -148,20 +149,21 @@ export class SubKeyAuthProvider implements AuthProvider {
 
     async getPassport(): Promise<string> {
 
-        return await fetch(`https://${this.host}/api/v1/auth/passport`, {
+        this.passport = fetch(`https://${this.host}/api/v1/auth/passport`, {
             method: 'GET',
             headers: { authorization: `Bearer ${this.getAuthToken(this.host)}` }
         })
             .then(async (res) => await res.json())
             .then((data) => {
-                this.passport = data.content
                 return data.content
             })
+
+        return this.passport
     }
 
     async getHeaders(domain: string) {
 
-        let passport = this.passport
+        let passport = await this.passport
         if (!passport) {
             passport = await this.getPassport()
         }
