@@ -38,6 +38,7 @@ export interface FetchOptions<T> {
     cache?: 'force-cache' | 'no-cache' | 'swr'
     expressGetter?: (data: T) => void
     ttl?: number
+    auth?: 'no-auth'
 }
 
 export class Api {
@@ -239,7 +240,10 @@ export class Api {
                 return this.inFlightRequests.get(cacheKey)
             }
 
-            const authHeaders = await this.authProvider.getHeaders(fetchHost)
+            let authHeaders = {}
+            if (opts?.auth !== 'no-auth') {
+                authHeaders = await this.authProvider.getHeaders(fetchHost)
+            }
 
             const requestOptions = {
                 method: 'GET',
@@ -322,10 +326,15 @@ export class Api {
     }
 
     async resolveDomain(ccid: string, hint?: string): Promise<string> {
-        const entity = await this.getEntity(ccid, hint)
-        if (!entity) throw new Error('failed to resolve entity: ' + ccid)
 
-        return entity.domain
+        if (IsCSID(ccid)) {
+            const domain = await this.getDomainByCSID(ccid)
+            return domain.fqdn
+        } else {
+            const entity = await this.getEntity(ccid, hint)
+            return entity.domain
+        }
+
     }
 
     invalidateEntity(ccid: string) {
@@ -452,7 +461,7 @@ export class Api {
     }
 
     async getTimelineListBySchema<T>(schema: string, remote?: string): Promise<Timeline<T>[]> {
-        const requestPath = `/timelines?schema=${encodeURIComponent(schema)}`
+        const requestPath = `${apiPath}/timelines?schema=${encodeURIComponent(schema)}`
         const host = remote ?? this.defaultHost
         return await this.fetchWithCredential<Timeline<T>[]>(host, requestPath) ?? []
     }
@@ -461,7 +470,7 @@ export class Api {
         const cacheKey = `timeline:${id}`
         const path = `${apiPath}/timeline/${id}`
         const host = await this.resolveTimelineHost(id)
-        return await this.fetchWithCache<Timeline<T>>(Timeline, host, path, cacheKey)
+        return await this.fetchWithCache<Timeline<T>>(Timeline, host, path, cacheKey, {ttl: 1000 * 60 * 5}) // 5 minutes
     }
 
     invalidateTimeline(id: string) {
@@ -506,14 +515,14 @@ export class Api {
 
         const host = await this.resolveTimelineHost(id)
 
-        const requestPath = `/timeline/${id}/associations`
+        const requestPath = `${apiPath}/timeline/${id}/associations`
         return await this.fetchWithCredential<Association<any>[]>(host, requestPath) ?? []
     }
 
     async getSubscription<T>(id: string): Promise<Subscription<T>> {
         const cacheKey = `subscription:${id}`
         const path = `${apiPath}/subscription/${id}`
-        return await this.fetchWithCache<Subscription<T>>(Subscription, this.defaultHost, path, cacheKey)
+        return await this.fetchWithCache<Subscription<T>>(Subscription, this.defaultHost, path, cacheKey, { cache: 'swr' })
     }
 
     async getOwnSubscriptions<T>(): Promise<Subscription<T>[]> {
@@ -529,7 +538,13 @@ export class Api {
     async getDomain(remote: string): Promise<Domain> {
         const cacheKey = `domain:${remote}`
         const path = `${apiPath}/domain`
-        return await this.fetchWithCache<Domain>(Domain, remote, path, cacheKey)
+        return await this.fetchWithCache<Domain>(Domain, remote, path, cacheKey, { auth: 'no-auth' })
+    }
+
+    async getDomainByCSID(csid: string): Promise<Domain> {
+        const cacheKey = `domain:${csid}`
+        const path = `${apiPath}/domain/${csid}`
+        return await this.fetchWithCache<Domain>(Domain, this.defaultHost, path, cacheKey)
     }
 
     invalidateDomain(remote: string) {
