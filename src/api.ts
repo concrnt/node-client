@@ -345,7 +345,12 @@ export class Api {
     async getMessage<T>(id: string, host: string = '', opts?: FetchOptions<Message<T>>): Promise<Message<T> | null> {
         const cacheKey = `message:${id}`
         const path = `${apiPath}/message/${id}`
-        return await this.fetchWithCache(Message, host, path, cacheKey, opts)
+        const message =  await this.fetchWithCache(Message, host, path, cacheKey, opts)
+
+        message.ownAssociations = message.ownAssociations?.map((item) => Object.setPrototypeOf(item, Association.prototype)) ?? []
+        message.associations = message.associations?.map((item) => Object.setPrototypeOf(item, Association.prototype)) ?? []
+
+        return message
     }
 
     invalidateMessage(id: string) {
@@ -373,7 +378,8 @@ export class Api {
     // GET:/api/v1/message/:id/associations
     async getMessageAssociations<T>(id: string, host: string = ''): Promise<Association<T>[]> {
         const path = `${apiPath}/message/${id}/associations`
-        return await this.fetchWithCredential<Association<T>[]>(host, path) ?? []
+        const data = await this.fetchWithCredential<Association<T>[]>(host, path) ?? []
+        return data.map((item) => Object.setPrototypeOf(item, Association.prototype))
     }
 
     // GET:/api/v1/message/:id/associations
@@ -391,7 +397,8 @@ export class Api {
         const host = await this.resolveDomain(targetAuthor)
         if (!host) throw new Error('domain not found')
 
-        return await this.fetchWithCredential<Association<T>[]>(host, requestPath) ?? []
+        const data = await this.fetchWithCredential<Association<T>[]>(host, requestPath) ?? []
+        return data.map((item) => Object.setPrototypeOf(item, Association.prototype))
     }
 
     async getAssociation<T>(id: string, host: string = ''): Promise<Association<T> | null> {
@@ -680,7 +687,9 @@ export class Api {
             policyParams,
         }
 
-        return await this.commit<Profile<T>>(documentObj)
+        const ret = await this.commit<Profile<T>>(documentObj)
+        this.invalidateProfile(ret.id)
+        return ret
     }
 
     async upsertTimeline<T>(
@@ -716,7 +725,9 @@ export class Api {
             policyParams,
         }
 
-        return await this.commit<Timeline<T>>(documentObj, host)
+        const ret = await this.commit<Timeline<T>>(documentObj, host)
+        this.invalidateTimeline(ret.id)
+        return ret
     }
 
     async retractItem(timeline: string, item: string): Promise<any> {
@@ -757,7 +768,9 @@ export class Api {
             policyParams
         }
 
-        return await this.commit<Subscription<T>>(documentObj)
+        const ret = await this.commit<Subscription<T>>(documentObj)
+        this.invalidateSubscription(ret.id)
+        return ret
     }
 
     async subscribe(target: string, subscription: string): Promise<any> {
@@ -771,8 +784,9 @@ export class Api {
             subscription,
             signedAt: new Date()
         }
-
-        return await this.commit(documentObj)
+        const ret = await this.commit(documentObj)
+        this.invalidateSubscription(subscription)
+        return ret
     }
 
     async unsubscribe(target: string, subscription: string): Promise<any> {
@@ -786,8 +800,9 @@ export class Api {
             subscription,
             signedAt: new Date()
         }
-
-        return await this.commit(documentObj)
+        const ret = await this.commit(documentObj)
+        this.invalidateSubscription(subscription)
+        return ret
     }
 
 
