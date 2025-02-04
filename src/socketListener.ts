@@ -37,7 +37,9 @@ export class SocketListener {
         this.streams = streams
         await this.socket.waitOpen()
         this.socket.listen(streams, (event: TimelineEvent) => {
-            switch (event.parsedDoc.type) {
+            const document = event.parsedDoc
+            if (!document) return
+            switch (document.type) {
                 case 'message':
                     this.emit('MessageCreated', event);
                     break;
@@ -45,8 +47,8 @@ export class SocketListener {
                     this.emit('AssociationCreated', event);
                     break;
                 case 'delete':
-                    const document = event.parsedDoc as CCDocument.Delete
-                    switch (document.target[0]) {
+                    const deleteDoc = document as CCDocument.Delete
+                    switch (deleteDoc.target[0]) {
                         case 'm':
                             this.emit('MessageDeleted', event);
                             break;

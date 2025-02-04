@@ -324,8 +324,12 @@ export class TimelineEvent {
     resource?: Message<any> | Association<any>
     signature: string = ''
 
-    get parsedDoc(): CCDocument.Message<any> | CCDocument.Association<any> | CCDocument.Delete {
-        return JSON.parse(this.document)
+    get parsedDoc(): CCDocument.Message<any> | CCDocument.Association<any> | CCDocument.Delete | null {
+        try {
+            return JSON.parse(this.document)
+        } catch (e) {
+            return null
+        }
     }
 }
 

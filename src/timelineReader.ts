@@ -21,7 +21,8 @@ export class TimelineReader {
     }
 
     processEvent(event: TimelineEvent) {
-        switch (event.parsedDoc.type) {
+        const document = event.parsedDoc
+        switch (document?.type) {
             case 'message': {
                 if (this.body.find(m => m.resourceID === event.item.resourceID)) return;
                 const item = Object.assign(event.item, {lastUpdate: new Date()});
@@ -30,8 +31,8 @@ export class TimelineReader {
                 break;
             }
             case 'association': {
-                const document = event.parsedDoc as CCDocument.Association<any>
-                const target = this.body.find(m => m.resourceID === document.target);
+                const assDoc = document as CCDocument.Association<any>
+                const target = this.body.find(m => m.resourceID === assDoc.target);
                 if (!target) return;
                 target.lastUpdate = new Date();
                 this.onUpdate?.();
@@ -39,10 +40,10 @@ export class TimelineReader {
             }
             case 'delete': {
                 if (!event.document) return;
-                const document = event.parsedDoc as CCDocument.Delete
-                switch (document.target[0]) {
+                const delDoc = document as CCDocument.Delete
+                switch (delDoc.target[0]) {
                     case 'm':
-                        this.body = this.body.filter(m => m.resourceID !== document.target);
+                        this.body = this.body.filter(m => m.resourceID !== delDoc.target);
                         this.onUpdate?.();
                         break;
                     case 'a':
