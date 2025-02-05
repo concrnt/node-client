@@ -19,6 +19,7 @@ import {
 } from "./model"
 import { KVS } from "./cache/main"
 import { AuthProvider } from "./auth/main"
+import { fetchWithTimeout } from "./util"
 
 const apiPath = '/api/v1'
 
@@ -41,10 +42,11 @@ export interface ApiResponse<T> {
 }
 
 export interface FetchOptions<T> {
-    cache?: 'force-cache' | 'no-cache' | 'swr'
+    cache?: 'force-cache' | 'no-cache' | 'swr' | 'best-effort'
     expressGetter?: (data: T) => void
     ttl?: number
     auth?: 'no-auth'
+    timeoutms?: number
 }
 
 export class Api {
@@ -89,7 +91,8 @@ export class Api {
     async fetchWithCredentialBlob(
         host: string,
         path: string,
-        init: RequestInit = {}
+        init: RequestInit = {},
+        timeoutms?: number
     ): Promise<Blob> {
 
         const fetchNetwork = async (): Promise<Blob> => {
@@ -107,7 +110,7 @@ export class Api {
                 ...authHeaders
             }
             
-            const req = fetch(url, init).then(async (res) => {
+            const req = fetchWithTimeout(url, init, timeoutms).then(async (res) => {
 
                 if ([502, 503, 504].includes(res.status)) {
                     await this.markHostOffline(fetchHost)
@@ -147,7 +150,8 @@ export class Api {
     async fetchWithCredential<T>(
         host: string,
         path: string,
-        init: RequestInit = {}
+        init: RequestInit = {},
+        timeoutms?: number
     ): Promise<T> {
 
         const fetchNetwork = async (): Promise<T> => {
@@ -166,7 +170,7 @@ export class Api {
                 ...authHeaders
             }
             
-            const req = fetch(url, init).then(async (res) => {
+            const req = fetchWithTimeout(url, init, timeoutms).then(async (res) => {
 
                 if ([502, 503, 504].includes(res.status)) {
                     await this.markHostOffline(fetchHost)
@@ -210,7 +214,7 @@ export class Api {
 
     async fetchWithCache<T>(
         cls: new () => T extends (infer U)[] ? U : T,
-        host: string,
+        host: string | undefined,
         path: string,
         cacheKey: string,
         opts?: FetchOptions<T>
@@ -230,7 +234,8 @@ export class Api {
                     this.cache.invalidate(cacheKey)
                 } else {
                     cached = cachedEntry.data
-                    if (opts?.cache !== 'swr') return cachedEntry.data
+                    console.log('cache hit', cacheKey, cachedEntry)
+                    if (!(opts?.cache === 'swr' || (opts?.cache === 'best-effort' && !cachedEntry.data))) return cachedEntry.data
                 }
             }
         }
@@ -261,7 +266,7 @@ export class Api {
                 }
             }
             
-            const req = fetch(url, requestOptions).then(async (res) => {
+            const req = fetchWithTimeout(url, requestOptions, opts?.timeoutms).then(async (res) => {
 
                 if ([502, 503, 504].includes(res.status)) {
                     await this.markHostOffline(fetchHost)
@@ -325,10 +330,10 @@ export class Api {
     }
 
     // GET:/api/v1/entity/:ccid
-    async getEntity(ccid: string, host: string = '', opts?: FetchOptions<Entity>): Promise<Entity> {
+    async getEntity(ccid: string, host?: string, opts?: FetchOptions<Entity>): Promise<Entity> {
         const cacheKey = `entity:${ccid}`
         const path = `${apiPath}/entity/${ccid}`
-        const data = await this.fetchWithCache(Entity, host, path, cacheKey, opts)
+        const data = await this.fetchWithCache(Entity, host ?? this.defaultHost, path, cacheKey, opts)
         if (!data) throw new NotFoundError(`entity ${ccid} not found`)
         return data
     }
@@ -341,10 +346,10 @@ export class Api {
     async resolveDomain(ccid: string, hint?: string): Promise<string> {
 
         if (IsCSID(ccid)) {
-            const domain = await this.getDomainByCSID(ccid)
+            const domain = await this.getDomainByCSID(ccid, { cache: 'best-effort' })
             return domain.fqdn
         } else {
-            const entity = await this.getEntity(ccid, hint)
+            const entity = await this.getEntity(ccid, hint, { cache: 'best-effort' })
             return entity.domain
         }
 
@@ -415,10 +420,10 @@ export class Api {
         return data.map((item) => Object.setPrototypeOf(item, Association.prototype))
     }
 
-    async getAssociation<T>(id: string, host: string = ''): Promise<Association<T>> {
+    async getAssociation<T>(id: string, host?: string, opts?: FetchOptions<Association<T>>): Promise<Association<T>> {
         const cacheKey = `association:${id}`
         const path = `${apiPath}/association/${id}`
-        const data = await this.fetchWithCache<Association<T>>(Association, host, path, cacheKey)
+        const data = await this.fetchWithCache<Association<T>>(Association, host, path, cacheKey, opts)
         if (!data) throw new NotFoundError(`association ${id} not found`)
         return data
     }
@@ -433,10 +438,10 @@ export class Api {
     }
 
     // GET:/api/v1/profile/:id
-    async getProfile<T>(id: string, host: string = ''): Promise<Profile<T>> {
+    async getProfile<T>(id: string, host?: string, opts?: FetchOptions<Profile<T>>): Promise<Profile<T>> {
         const cacheKey = `profile:${id}`
         const path = `${apiPath}/profile/${id}`
-        const data = await this.fetchWithCache<Profile<T>>(Profile, host, path, cacheKey)
+        const data = await this.fetchWithCache<Profile<T>>(Profile, host, path, cacheKey, opts)
         if (!data) throw new NotFoundError(`profile ${id} not found`)
         return data
     }
@@ -445,12 +450,12 @@ export class Api {
         this.cache.invalidate(`profile:${id}`)
     }
 
-    async getProfileBySemanticID<T>(semanticID: string, owner: string): Promise<Profile<T>> {
+    async getProfileBySemanticID<T>(semanticID: string, owner: string, opts?: FetchOptions<Profile<T>>): Promise<Profile<T>> {
         const cacheKey = `profile:${semanticID}@${owner}`
         const path = `${apiPath}/profile/${owner}/${semanticID}`
 
         const host = (await this.resolveDomain(owner)) ?? this.defaultHost
-        const data = await this.fetchWithCache<Profile<T>>(Profile, host, path, cacheKey)
+        const data = await this.fetchWithCache<Profile<T>>(Profile, host, path, cacheKey, opts)
         if (!data) throw new NotFoundError(`profile ${semanticID}@${owner} not found`)
         return data
     }
@@ -493,11 +498,11 @@ export class Api {
         return await this.fetchWithCredential<Timeline<T>[]>(host, requestPath) ?? []
     }
 
-    async getTimeline<T>(id: string): Promise<Timeline<T>> {
+    async getTimeline<T>(id: string, opts?: FetchOptions<Timeline<T>>): Promise<Timeline<T>> {
         const cacheKey = `timeline:${id}`
         const path = `${apiPath}/timeline/${id}`
         const host = await this.resolveTimelineHost(id)
-        const data = await this.fetchWithCache<Timeline<T>>(Timeline, host, path, cacheKey, {ttl: 1000 * 60 * 5}) // 5 minutes
+        const data = await this.fetchWithCache<Timeline<T>>(Timeline, host, path, cacheKey, opts) // 5 minutes
         if (!data) throw new NotFoundError(`timeline ${id} not found`)
         return data
     }
@@ -548,10 +553,10 @@ export class Api {
         return await this.fetchWithCredential<Association<any>[]>(host, requestPath) ?? []
     }
 
-    async getSubscription<T>(id: string): Promise<Subscription<T>> {
+    async getSubscription<T>(id: string, opts?: FetchOptions<Subscription<T>>): Promise<Subscription<T>> {
         const cacheKey = `subscription:${id}`
         const path = `${apiPath}/subscription/${id}`
-        const data = await this.fetchWithCache<Subscription<T>>(Subscription, this.defaultHost, path, cacheKey, { cache: 'swr' })
+        const data = await this.fetchWithCache<Subscription<T>>(Subscription, this.defaultHost, path, cacheKey, opts)
         if (!data) throw new NotFoundError(`subscription ${id} not found`)
         return data
     }
@@ -566,18 +571,18 @@ export class Api {
         this.cache.invalidate(`subscription:${id}`)
     }
 
-    async getDomain(remote: string): Promise<Domain> {
+    async getDomain(remote: string, opts?: FetchOptions<Domain>): Promise<Domain> {
         const cacheKey = `domain:${remote}`
         const path = `${apiPath}/domain`
-        const data = await this.fetchWithCache<Domain>(Domain, remote, path, cacheKey, { auth: 'no-auth' })
+        const data = await this.fetchWithCache<Domain>(Domain, remote, path, cacheKey, { ...opts, auth: 'no-auth' })
         if (!data) throw new NotFoundError(`domain ${remote} not found`)
         return data
     }
 
-    async getDomainByCSID(csid: string): Promise<Domain> {
+    async getDomainByCSID(csid: string, opts?: FetchOptions<Domain>): Promise<Domain> {
         const cacheKey = `domain:${csid}`
         const path = `${apiPath}/domain/${csid}`
-        const data = await this.fetchWithCache<Domain>(Domain, this.defaultHost, path, cacheKey)
+        const data = await this.fetchWithCache<Domain>(Domain, this.defaultHost, path, cacheKey, { ...opts, auth: 'no-auth' })
         if (!data) throw new NotFoundError(`domain ${csid} not found`)
         return data
     }
