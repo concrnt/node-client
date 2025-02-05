@@ -65,8 +65,27 @@ export class Api {
         this.defaultHost = authProvider.getHost()
     }
 
-    private isHostOnline = async (host: string): Promise<boolean> => {
+    getDomainOnlineStatus = async (host: string): Promise<boolean> => {
         const cacheKey = `online:${host}`
+        const entry = await this.cache.get<number>(cacheKey)
+        if (entry) {
+            const age = Date.now() - entry.timestamp
+            if (age < 5000) {
+                return true
+            }
+        }
+
+        return await this.getDomain(host, { cache: 'no-cache' }).then(() => {
+            this.cache.set(cacheKey, 1)
+            return true
+        }).catch(() => {
+            this.cache.invalidate(cacheKey)
+            return false
+        })
+    }
+
+    private isHostOnline = async (host: string): Promise<boolean> => {
+        const cacheKey = `offline:${host}`
         const entry = await this.cache.get<number>(cacheKey)
         if (entry) {
             const age = Date.now() - entry.timestamp
@@ -79,12 +98,12 @@ export class Api {
     }
 
     private markHostOnline = async (host: string) => {
-        const cacheKey = `online:${host}`
+        const cacheKey = `offline:${host}`
         this.cache.invalidate(cacheKey)
     }
 
     private markHostOffline = async (host: string) => {
-        const cacheKey = `online:${host}`
+        const cacheKey = `offline:${host}`
         const failCount = (await this.cache.get<number>(cacheKey))?.data ?? 0
         this.cache.set(cacheKey, failCount + 1)
     }
