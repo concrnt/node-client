@@ -44,7 +44,7 @@ export interface ApiResponse<T> {
 export interface FetchOptions<T> {
     cache?: 'force-cache' | 'no-cache' | 'swr' | 'best-effort'
     expressGetter?: (data: T) => void
-    ttl?: number
+    TTL?: number
     auth?: 'no-auth'
     timeoutms?: number
 }
@@ -54,6 +54,7 @@ export class Api {
     authProvider: AuthProvider
     cache: KVS
     defaultHost: string = ''
+    negativeCacheTTL: number = 300
 
     private inFlightRequests = new Map<string, Promise<any>>()
 
@@ -230,11 +231,10 @@ export class Api {
                 }
 
                 const age = Date.now() - cachedEntry.timestamp
-                if (age > (opts?.ttl ?? Infinity)) {
+                if (age > (cachedEntry.data ? (opts?.TTL ?? Infinity) : this.negativeCacheTTL)) {
                     this.cache.invalidate(cacheKey)
                 } else {
                     cached = cachedEntry.data
-                    console.log('cache hit', cacheKey, cachedEntry)
                     if (!(opts?.cache === 'swr' || (opts?.cache === 'best-effort' && !cachedEntry.data))) return cachedEntry.data
                 }
             }
