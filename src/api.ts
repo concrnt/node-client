@@ -22,9 +22,15 @@ import { AuthProvider } from "./auth/main"
 
 const apiPath = '/api/v1'
 
-class DomainOfflineError extends Error {
+export class DomainOfflineError extends Error {
     constructor(domain: string) {
         super(`domain ${domain} is offline`)
+    }
+}
+
+export class NotFoundError extends Error {
+    constructor(msg: string) {
+        super(msg)
     }
 }
 
@@ -208,14 +214,16 @@ export class Api {
         path: string,
         cacheKey: string,
         opts?: FetchOptions<T>
-    ): Promise<T> {
+    ): Promise<T | null> {
 
         let cached: T | null = null
         if (opts?.cache !== 'no-cache') {
             const cachedEntry = await this.cache.get<T>(cacheKey)
             if (cachedEntry) {
-                Object.setPrototypeOf(cachedEntry?.data, cls.prototype)
-                opts?.expressGetter?.(cachedEntry.data)
+                if (cachedEntry.data) {
+                    Object.setPrototypeOf(cachedEntry.data, cls.prototype)
+                    opts?.expressGetter?.(cachedEntry.data)
+                }
 
                 const age = Date.now() - cachedEntry.timestamp
                 if (age > (opts?.ttl ?? Infinity)) {
@@ -261,7 +269,10 @@ export class Api {
                 }
 
                 if (!res.ok) {
-                    if (res.status === 404) return null 
+                    if (res.status === 404) {
+                        this.cache.set(cacheKey, null)
+                        return null
+                    }
                     return await Promise.reject(new Error(`fetch failed on transport: ${res.status} ${await res.text()}`))
                 }
 
@@ -317,7 +328,9 @@ export class Api {
     async getEntity(ccid: string, host: string = '', opts?: FetchOptions<Entity>): Promise<Entity> {
         const cacheKey = `entity:${ccid}`
         const path = `${apiPath}/entity/${ccid}`
-        return await this.fetchWithCache(Entity, host, path, cacheKey, opts)
+        const data = await this.fetchWithCache(Entity, host, path, cacheKey, opts)
+        if (!data) throw new NotFoundError(`entity ${ccid} not found`)
+        return data
     }
 
     async getEntities(): Promise<Entity[]> {
@@ -342,10 +355,11 @@ export class Api {
     }
 
     // GET:/api/v1/message/:id
-    async getMessage<T>(id: string, host: string = '', opts?: FetchOptions<Message<T>>): Promise<Message<T> | null> {
+    async getMessage<T>(id: string, host: string = '', opts?: FetchOptions<Message<T>>): Promise<Message<T>> {
         const cacheKey = `message:${id}`
         const path = `${apiPath}/message/${id}`
         const message =  await this.fetchWithCache(Message, host, path, cacheKey, opts)
+        if (!message) throw new NotFoundError(`message ${id} not found`)
 
         message.ownAssociations = message.ownAssociations?.map((item) => Object.setPrototypeOf(item, Association.prototype)) ?? []
         message.associations = message.associations?.map((item) => Object.setPrototypeOf(item, Association.prototype)) ?? []
@@ -357,9 +371,9 @@ export class Api {
         this.cache.invalidate(`message:${id}`)
     }
 
-    async getMessageWithAuthor(messageId: string, author: string, hint?: string): Promise<Message<any> | null> {
+    async getMessageWithAuthor(messageId: string, author: string, hint?: string): Promise<Message<any>> {
         const host = await this.resolveDomain(author, hint)
-        if (!host) return null
+        if (!host) throw new Error('domain not found')
 
         return await this.getMessage(messageId, host)
     }
@@ -401,38 +415,44 @@ export class Api {
         return data.map((item) => Object.setPrototypeOf(item, Association.prototype))
     }
 
-    async getAssociation<T>(id: string, host: string = ''): Promise<Association<T> | null> {
+    async getAssociation<T>(id: string, host: string = ''): Promise<Association<T>> {
         const cacheKey = `association:${id}`
         const path = `${apiPath}/association/${id}`
-        return await this.fetchWithCache<Association<T>>(Association, host, path, cacheKey)
+        const data = await this.fetchWithCache<Association<T>>(Association, host, path, cacheKey)
+        if (!data) throw new NotFoundError(`association ${id} not found`)
+        return data
     }
 
     invalidateAssociation(id: string) {
         this.cache.invalidate(`association:${id}`)
     }
 
-    async getAssociationWithOwner<T>(id: string, owner: string): Promise<Association<T> | null> {
+    async getAssociationWithOwner<T>(id: string, owner: string): Promise<Association<T>> {
         const host = (await this.resolveDomain(owner)) ?? this.defaultHost
         return await this.getAssociation(id, host)
     }
 
     // GET:/api/v1/profile/:id
-    async getProfile<T>(id: string, host: string = ''): Promise<Profile<T> | null> {
+    async getProfile<T>(id: string, host: string = ''): Promise<Profile<T>> {
         const cacheKey = `profile:${id}`
         const path = `${apiPath}/profile/${id}`
-        return await this.fetchWithCache<Profile<T>>(Profile, host, path, cacheKey)
+        const data = await this.fetchWithCache<Profile<T>>(Profile, host, path, cacheKey)
+        if (!data) throw new NotFoundError(`profile ${id} not found`)
+        return data
     }
 
     invalidateProfile(id: string) {
         this.cache.invalidate(`profile:${id}`)
     }
 
-    async getProfileBySemanticID<T>(semanticID: string, owner: string): Promise<Profile<T> | null> {
+    async getProfileBySemanticID<T>(semanticID: string, owner: string): Promise<Profile<T>> {
         const cacheKey = `profile:${semanticID}@${owner}`
         const path = `${apiPath}/profile/${owner}/${semanticID}`
 
         const host = (await this.resolveDomain(owner)) ?? this.defaultHost
-        return await this.fetchWithCache<Profile<T>>(Profile, host, path, cacheKey)
+        const data = await this.fetchWithCache<Profile<T>>(Profile, host, path, cacheKey)
+        if (!data) throw new NotFoundError(`profile ${semanticID}@${owner} not found`)
+        return data
     }
 
     async getProfiles<T>(query: {author?: string, schema?: string, since?: number, until?: number, limit?: number, domain?: string}): Promise<Profile<T>[]> {
@@ -473,11 +493,13 @@ export class Api {
         return await this.fetchWithCredential<Timeline<T>[]>(host, requestPath) ?? []
     }
 
-    async getTimeline<T>(id: string): Promise<Timeline<T> | null> {
+    async getTimeline<T>(id: string): Promise<Timeline<T>> {
         const cacheKey = `timeline:${id}`
         const path = `${apiPath}/timeline/${id}`
         const host = await this.resolveTimelineHost(id)
-        return await this.fetchWithCache<Timeline<T>>(Timeline, host, path, cacheKey, {ttl: 1000 * 60 * 5}) // 5 minutes
+        const data = await this.fetchWithCache<Timeline<T>>(Timeline, host, path, cacheKey, {ttl: 1000 * 60 * 5}) // 5 minutes
+        if (!data) throw new NotFoundError(`timeline ${id} not found`)
+        return data
     }
 
     invalidateTimeline(id: string) {
@@ -529,7 +551,9 @@ export class Api {
     async getSubscription<T>(id: string): Promise<Subscription<T>> {
         const cacheKey = `subscription:${id}`
         const path = `${apiPath}/subscription/${id}`
-        return await this.fetchWithCache<Subscription<T>>(Subscription, this.defaultHost, path, cacheKey, { cache: 'swr' })
+        const data = await this.fetchWithCache<Subscription<T>>(Subscription, this.defaultHost, path, cacheKey, { cache: 'swr' })
+        if (!data) throw new NotFoundError(`subscription ${id} not found`)
+        return data
     }
 
     async getOwnSubscriptions<T>(): Promise<Subscription<T>[]> {
@@ -545,13 +569,17 @@ export class Api {
     async getDomain(remote: string): Promise<Domain> {
         const cacheKey = `domain:${remote}`
         const path = `${apiPath}/domain`
-        return await this.fetchWithCache<Domain>(Domain, remote, path, cacheKey, { auth: 'no-auth' })
+        const data = await this.fetchWithCache<Domain>(Domain, remote, path, cacheKey, { auth: 'no-auth' })
+        if (!data) throw new NotFoundError(`domain ${remote} not found`)
+        return data
     }
 
     async getDomainByCSID(csid: string): Promise<Domain> {
         const cacheKey = `domain:${csid}`
         const path = `${apiPath}/domain/${csid}`
-        return await this.fetchWithCache<Domain>(Domain, this.defaultHost, path, cacheKey)
+        const data = await this.fetchWithCache<Domain>(Domain, this.defaultHost, path, cacheKey)
+        if (!data) throw new NotFoundError(`domain ${csid} not found`)
+        return data
     }
 
     invalidateDomain(remote: string) {
