@@ -137,6 +137,7 @@ export class Api {
             try {
                 const authHeaders = await this.authProvider.getHeaders(fetchHost)
                 init.headers = {
+                    ...init.headers,
                     ...authHeaders
                 }
             } catch (e) {
@@ -210,11 +211,13 @@ export class Api {
             try {
                 const authHeaders = await this.authProvider.getHeaders(fetchHost)
                 init.headers = {
+                    ...init.headers,
                     ...authHeaders
                 }
             } catch (e) {
                 console.error('failed to get auth headers', e)
             }
+            console.log(init)
             
             const req = fetchWithTimeout(url, init, timeoutms).then(async (res) => {
 
@@ -237,9 +240,11 @@ export class Api {
                 this.markHostOnline(fetchHost)
 
                 const data: ApiResponse<T> = await res.json()
+                /*
                 if (data.status != 'ok') {
                     return await Promise.reject(new Error(`getMessage failed on application: ${data.error}`))
                 }
+                */
 
                 return data.content
 
