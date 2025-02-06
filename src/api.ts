@@ -129,11 +129,18 @@ export class Api {
                 return Promise.reject(new DomainOfflineError(fetchHost))
             }
 
-            const authHeaders = await this.authProvider.getHeaders(fetchHost)
 
             init.headers = {
                 ...init.headers,
-                ...authHeaders
+            }
+
+            try {
+                const authHeaders = await this.authProvider.getHeaders(fetchHost)
+                init.headers = {
+                    ...authHeaders
+                }
+            } catch (e) {
+                console.error('failed to get auth headers', e)
             }
             
             const req = fetchWithTimeout(url, init, timeoutms).then(async (res) => {
@@ -195,12 +202,18 @@ export class Api {
                 return Promise.reject(new DomainOfflineError(fetchHost))
             }
 
-            const authHeaders = await this.authProvider.getHeaders(fetchHost)
-
             init.headers = {
                 'Accept': 'application/json',
                 ...init.headers,
-                ...authHeaders
+            }
+
+            try {
+                const authHeaders = await this.authProvider.getHeaders(fetchHost)
+                init.headers = {
+                    ...authHeaders
+                }
+            } catch (e) {
+                console.error('failed to get auth headers', e)
             }
             
             const req = fetchWithTimeout(url, init, timeoutms).then(async (res) => {
@@ -294,7 +307,11 @@ export class Api {
 
             let authHeaders = {}
             if (opts?.auth !== 'no-auth') {
-                authHeaders = await this.authProvider.getHeaders(fetchHost)
+                try {
+                    authHeaders = await this.authProvider.getHeaders(fetchHost)
+                } catch (e) {
+                    console.error('failed to get auth headers', e)
+                }
             }
 
             const requestOptions = {

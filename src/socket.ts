@@ -13,8 +13,11 @@ export class Socket {
     failcount = 0
     reconnecting = false
 
-    constructor(api: Api) {
+    hostOverride?: string;
+
+    constructor(api: Api, hostOverride?: string) {
         this.api = api
+        this.hostOverride = hostOverride
 
         this.connect()
         setInterval(() => {
@@ -26,7 +29,7 @@ export class Socket {
     }
 
     connect() {
-        this.ws = new WS('wss://' + this.api.defaultHost + '/api/v1/timelines/realtime');
+        this.ws = new WS('wss://' + (this.hostOverride ?? this.api.defaultHost) + '/api/v1/timelines/realtime');
 
         this.ws.onmessage = (rawevent: any) => {
 
