@@ -217,7 +217,6 @@ export class Api {
             } catch (e) {
                 console.error('failed to get auth headers', e)
             }
-            console.log(init)
             
             const req = fetchWithTimeout(url, init, timeoutms).then(async (res) => {
 
@@ -513,9 +512,11 @@ export class Api {
     }
 
     // GET:/api/v1/profile/:id
-    async getProfile<T>(id: string, host?: string, opts?: FetchOptions<Profile<T>>): Promise<Profile<T>> {
+    async getProfile<T>(id: string, owner: string, opts?: FetchOptions<Profile<T>>): Promise<Profile<T>> {
         const cacheKey = `profile:${id}`
         const path = `${apiPath}/profile/${id}`
+
+        const host = await this.resolveDomain(owner)
         const data = await this.fetchWithCache<Profile<T>>(Profile, host, path, cacheKey, opts)
         if (!data) throw new NotFoundError(`profile ${id} not found`)
         return data
