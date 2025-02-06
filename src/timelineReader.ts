@@ -15,9 +15,12 @@ export class TimelineReader {
     api: Api;
     streams: string[] = [];
 
-    constructor(api: Api, socket?: Socket) {
+    hostOverride?: string;
+
+    constructor(api: Api, socket?: Socket, hostOverride?: string) {
         this.api = api;
         this.socket = socket;
+        this.hostOverride = hostOverride;
     }
 
     processEvent(event: TimelineEvent) {
@@ -80,7 +83,7 @@ export class TimelineReader {
 
         let hasMore = true;
 
-        await this.api.getTimelineRecent(streams).then((items: TimelineItem[]) => {
+        await this.api.getTimelineRecent(streams, this.hostOverride).then((items: TimelineItem[]) => {
             const itemsWithUpdate = items.map(item => Object.assign(item, {lastUpdate: new Date()}));
             this.body = itemsWithUpdate;
             if (items.length < 16) {
@@ -97,7 +100,7 @@ export class TimelineReader {
     async readMore(): Promise<boolean> {
         if (this.body.length === 0) return false
         const last = this.body[this.body.length - 1];
-        const items = await this.api.getTimelineRanged(this.streams, {until: last.created});
+        const items = await this.api.getTimelineRanged(this.streams, {until: last.created}, this.hostOverride);
         const newdata = items.filter(item => !this.body.find(i => i.resourceID === item.resourceID));
         const newdataWithUpdate = newdata.map(item => Object.assign(item, {lastUpdate: new Date()}));
         if (newdata.length === 0) return false
@@ -108,7 +111,7 @@ export class TimelineReader {
 
     async reload(): Promise<boolean> {
         let hasMore = true;
-        const items = await this.api.getTimelineRecent(this.streams);
+        const items = await this.api.getTimelineRecent(this.streams, this.hostOverride);
         const itemsWithUpdate = items.map(item => Object.assign(item, {lastUpdate: new Date()}));
         this.body = itemsWithUpdate;
         if (items.length < 16) {

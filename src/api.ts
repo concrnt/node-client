@@ -554,9 +554,9 @@ export class Api {
         this.cache.invalidate(`timeline:${id}`)
     }
 
-    async getTimelineRecent(timelines: string[]): Promise<TimelineItem[]> {
+    async getTimelineRecent(timelines: string[], host?: string): Promise<TimelineItem[]> {
         const requestPath = `${apiPath}/timelines/recent?timelines=${timelines.join(',')}`
-        const data = await this.fetchWithCredential<TimelineItem[]>(this.defaultHost, requestPath) ?? []
+        const data = await this.fetchWithCredential<TimelineItem[]>(host ?? this.defaultHost, requestPath) ?? []
         return data.map((item) => Object.setPrototypeOf(item, TimelineItem.prototype))
     }
 
@@ -577,13 +577,13 @@ export class Api {
         return data.map(item => Object.setPrototypeOf(item, TimelineItem.prototype))
     }
 
-    async getTimelineRanged(timelines: string[], param: {until?: Date, since?: Date}): Promise<TimelineItem[]> {
+    async getTimelineRanged(timelines: string[], param: {until?: Date, since?: Date}, host?: string): Promise<TimelineItem[]> {
 
         const sinceQuery = !param.since ? '' : `&since=${Math.floor(param.since.getTime()/1000)}`
         const untilQuery = !param.until ? '' : `&until=${Math.ceil(param.until.getTime()/1000)}`
 
         const requestPath = `${apiPath}/timelines/range?timelines=${timelines.join(',')}${sinceQuery}${untilQuery}`
-        const data = await this.fetchWithCredential<TimelineItem[]>(this.defaultHost, requestPath) ?? []
+        const data = await this.fetchWithCredential<TimelineItem[]>(host ?? this.defaultHost, requestPath) ?? []
         return data.map(item => Object.setPrototypeOf(item, TimelineItem.prototype))
 
     }
