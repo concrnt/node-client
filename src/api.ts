@@ -278,7 +278,11 @@ export class Api {
             const cachedEntry = await this.cache.get<T>(cacheKey)
             if (cachedEntry) {
                 if (cachedEntry.data) {
-                    Object.setPrototypeOf(cachedEntry.data, cls.prototype)
+                    if (Array.isArray(cachedEntry.data)) {
+                        cachedEntry.data.map((item) => Object.setPrototypeOf(item, cls.prototype))
+                    } else {
+                        Object.setPrototypeOf(cachedEntry.data, cls.prototype)
+                    }
                     opts?.expressGetter?.(cachedEntry.data)
                 }
 
@@ -389,10 +393,17 @@ export class Api {
     }
 
     // GET:/api/v1/entity/:ccid
-    async getEntity(ccid: string, host?: string, opts?: FetchOptions<Entity>): Promise<Entity> {
+    async getEntity(ccid: string, hint?: string, opts?: FetchOptions<Entity>): Promise<Entity> {
         const cacheKey = `entity:${ccid}`
-        const path = `${apiPath}/entity/${ccid}`
-        const data = await this.fetchWithCache(Entity, host ?? this.defaultHost, path, cacheKey, opts)
+        let path = `${apiPath}/entity/${ccid}`
+        if (hint) path += `?hint=${hint}`
+
+        let resolver = this.defaultHost
+        if (hint && !await this.getDomainOnlineStatus(this.defaultHost)) {
+            resolver = hint
+        }
+
+        const data = await this.fetchWithCache(Entity, resolver, path, cacheKey, opts)
         if (!data) throw new NotFoundError(`entity ${ccid} not found`)
         return data
     }
@@ -752,6 +763,9 @@ export class Api {
         variant: string = ''
     ): Promise<Association<T>> {
 
+        const targetHost = await this.resolveDomain(targetAuthor)
+        if (!targetHost) throw new Error('domain not found')
+
         const ccid = this.authProvider.getCCID()
 
         const documentObj: CCDocument.Association<T> = {
@@ -766,7 +780,7 @@ export class Api {
             signedAt: new Date()
         }
 
-        return await this.commit<Association<T>>(documentObj)
+        return await this.commit<Association<T>>(documentObj, targetHost)
     }
 
     async upsertProfile<T>(
