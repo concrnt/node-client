@@ -446,11 +446,11 @@ export class Api {
         this.cache.invalidate(`message:${id}`)
     }
 
-    async getMessageWithAuthor(messageId: string, author: string, hint?: string): Promise<Message<any>> {
+    async getMessageWithAuthor<T>(messageId: string, author: string, hint?: string, opts?: FetchOptions<Message<T>>): Promise<Message<T>> {
         const host = await this.resolveDomain(author, hint)
         if (!host) throw new Error('domain not found')
 
-        return await this.getMessage(messageId, host)
+        return await this.getMessage(messageId, host, opts)
     }
 
     // GET:/api/v1/message/:id/associationcounts
