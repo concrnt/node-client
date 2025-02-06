@@ -35,6 +35,12 @@ export class NotFoundError extends Error {
     }
 }
 
+export class PermissionError extends Error {
+    constructor(msg: string) {
+        super(msg)
+    }
+}
+
 export interface ApiResponse<T> {
     content: T
     status: 'ok' | 'error'
@@ -132,9 +138,16 @@ export class Api {
             
             const req = fetchWithTimeout(url, init, timeoutms).then(async (res) => {
 
-                if ([502, 503, 504].includes(res.status)) {
-                    await this.markHostOffline(fetchHost)
-                    return await Promise.reject(new DomainOfflineError(fetchHost))
+                switch (res.status) {
+                    case 403:
+                        throw new PermissionError(`fetch failed on transport: ${res.status} ${await res.text()}`)
+                    case 404:
+                        throw new NotFoundError(`fetch failed on transport: ${res.status} ${await res.text()}`)
+                    case 502:
+                    case 503:
+                    case 504:
+                        await this.markHostOffline(fetchHost)
+                        throw new DomainOfflineError(fetchHost)
                 }
 
                 if (!res.ok) {
@@ -192,9 +205,16 @@ export class Api {
             
             const req = fetchWithTimeout(url, init, timeoutms).then(async (res) => {
 
-                if ([502, 503, 504].includes(res.status)) {
-                    await this.markHostOffline(fetchHost)
-                    return await Promise.reject(new DomainOfflineError(fetchHost))
+                switch (res.status) {
+                    case 403:
+                        throw new PermissionError(`fetch failed on transport: ${res.status} ${await res.text()}`)
+                    case 404:
+                        throw new NotFoundError(`fetch failed on transport: ${res.status} ${await res.text()}`)
+                    case 502:
+                    case 503:
+                    case 504:
+                        await this.markHostOffline(fetchHost)
+                        throw new DomainOfflineError(fetchHost)
                 }
 
                 if (!res.ok) {
@@ -286,6 +306,10 @@ export class Api {
             }
             
             const req = fetchWithTimeout(url, requestOptions, opts?.timeoutms).then(async (res) => {
+
+                if (res.status === 403) {
+                    return await Promise.reject(new PermissionError(await res.text()))
+                }
 
                 if ([502, 503, 504].includes(res.status)) {
                     await this.markHostOffline(fetchHost)
