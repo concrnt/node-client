@@ -809,6 +809,9 @@ export class Api {
         }
 
         const ret = await this.commit<Profile<T>>(documentObj)
+        if (semanticID) {
+            this.invalidateProfile(`${semanticID}@${ccid}`)
+        }
         this.invalidateProfile(ret.id)
         return ret
     }
@@ -847,6 +850,9 @@ export class Api {
         }
 
         const ret = await this.commit<Timeline<T>>(documentObj, host)
+        if (semanticID) {
+            this.invalidateTimeline(`${semanticID}@${owner ?? ccid}`)
+        }
         this.invalidateTimeline(ret.id)
         return ret
     }
@@ -890,6 +896,9 @@ export class Api {
         }
 
         const ret = await this.commit<Subscription<T>>(documentObj)
+        if (semanticID) {
+            this.invalidateSubscription(`${semanticID}@${ccid}`)
+        }
         this.invalidateSubscription(ret.id)
         return ret
     }
