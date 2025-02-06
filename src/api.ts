@@ -48,7 +48,7 @@ export interface ApiResponse<T> {
 }
 
 export interface FetchOptions<T> {
-    cache?: 'force-cache' | 'no-cache' | 'swr' | 'best-effort'
+    cache?: 'force-cache' | 'no-cache' | 'swr' | 'best-effort' | 'negative-only'
     expressGetter?: (data: T) => void
     TTL?: number
     auth?: 'no-auth'
@@ -348,7 +348,7 @@ export class Api {
                 }
                 
                 opts?.expressGetter?.(data.content)
-                this.cache.set(cacheKey, data.content)
+                if (opts?.cache !== 'negative-only') this.cache.set(cacheKey, data.content)
 
                 if (Array.isArray(data.content)) {
                     return data.content.map((item) => Object.setPrototypeOf(item, cls.prototype))
@@ -422,7 +422,7 @@ export class Api {
     async getMessage<T>(id: string, host: string = '', opts?: FetchOptions<Message<T>>): Promise<Message<T>> {
         const cacheKey = `message:${id}`
         const path = `${apiPath}/message/${id}`
-        const message =  await this.fetchWithCache(Message, host, path, cacheKey, opts)
+        const message =  await this.fetchWithCache(Message, host, path, cacheKey, {...opts, cache: 'negative-only'})
         if (!message) throw new NotFoundError(`message ${id} not found`)
 
         message.ownAssociations = message.ownAssociations?.map((item) => Object.setPrototypeOf(item, Association.prototype)) ?? []
@@ -655,16 +655,26 @@ export class Api {
         return await this.fetchWithCredential<Domain[]>(this.defaultHost, requestPath) ?? []
     }
 
-    async getAcking(ccid: string): Promise<Ack[]> {
+    async getAcking(ccid: string, opts?: FetchOptions<Ack[]>): Promise<Ack[]> {
+        const cacheKey = `acking:${ccid}`
         const host = (await this.resolveDomain(ccid)) ?? this.defaultHost
         const requestPath = `${apiPath}/entity/${ccid}/acking`
-        return await this.fetchWithCredential<Ack[]>(host, requestPath) ?? []
+        return await this.fetchWithCache<Ack[]>(Ack, host, requestPath, cacheKey, opts) ?? []
     }
 
-    async getAcker(ccid: string): Promise<Ack[]> {
+    invalidateAcking(ccid: string) {
+        this.cache.invalidate(`acking:${ccid}`)
+    }
+
+    async getAcker(ccid: string, opts?: FetchOptions<Ack[]>): Promise<Ack[]> {
+        const cacheKey = `acker:${ccid}`
         const host = (await this.resolveDomain(ccid)) ?? this.defaultHost
         const requestPath = `${apiPath}/entity/${ccid}/acker`
-        return await this.fetchWithCredential<Ack[]>(host, requestPath) ?? []
+        return await this.fetchWithCache<Ack[]>(Ack, host, requestPath, cacheKey, opts) ?? []
+    }
+
+    invalidateAcker(ccid: string) {
+        this.cache.invalidate(`acker:${ccid}`)
     }
 
     async getKeyList(): Promise<Key[]> {
@@ -910,7 +920,10 @@ export class Api {
             signedAt: new Date()
         }
 
-        return await this.commit(documentObj)
+        const res = await this.commit(documentObj)
+        this.invalidateAcking(ccid)
+        this.invalidateAcker(target)
+        return res
     }
 
     async unack(target: string): Promise<any> {
@@ -925,7 +938,10 @@ export class Api {
             signedAt: new Date()
         }
 
-        return await this.commit(documentObj)
+        const res = await this.commit(documentObj)
+        this.invalidateAcking(ccid)
+        this.invalidateAcker(target)
+        return res
     }
 
     async enactSubkey(subkey: string): Promise<void> {
