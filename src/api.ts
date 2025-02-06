@@ -282,11 +282,10 @@ export class Api {
                     opts?.expressGetter?.(cachedEntry.data)
                 }
 
+                cached = cachedEntry.data
+
                 const age = Date.now() - cachedEntry.timestamp
-                if (age > (cachedEntry.data ? (opts?.TTL ?? Infinity) : this.negativeCacheTTL)) {
-                    this.cache.invalidate(cacheKey)
-                } else {
-                    cached = cachedEntry.data
+                if (age < (cachedEntry.data ? (opts?.TTL ?? Infinity) : this.negativeCacheTTL)) { // return cached if TTL is not expired
                     if (!(opts?.cache === 'swr' || (opts?.cache === 'best-effort' && !cachedEntry.data))) return cachedEntry.data
                 }
             }
@@ -386,7 +385,7 @@ export class Api {
             return cached
         }
 
-        return await fetchNetwork()
+        return (await fetchNetwork()) ?? cached // return cached if fetch failed
     }
 
     // GET:/api/v1/entity/:ccid
