@@ -62,7 +62,7 @@ export class Api {
     authProvider: AuthProvider
     cache: KVS
     defaultHost: string = ''
-    defaultCacheTTL: number = 300
+    defaultCacheTTL: number = Infinity
     negativeCacheTTL: number = 300
 
     private inFlightRequests = new Map<string, Promise<any>>()
