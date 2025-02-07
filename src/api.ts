@@ -50,7 +50,7 @@ export interface ApiResponse<T> {
 }
 
 export interface FetchOptions<T> {
-    cache?: 'force-cache' | 'no-cache' | 'swr' | 'best-effort' | 'negative-only'
+    cache?: 'force-cache' | 'no-cache' | 'best-effort' | 'negative-only'
     expressGetter?: (data: T) => void
     TTL?: number
     auth?: 'no-auth'
@@ -62,6 +62,7 @@ export class Api {
     authProvider: AuthProvider
     cache: KVS
     defaultHost: string = ''
+    defaultCacheTTL: number = 300
     negativeCacheTTL: number = 300
 
     private inFlightRequests = new Map<string, Promise<any>>()
@@ -288,8 +289,8 @@ export class Api {
                 cached = cachedEntry.data
 
                 const age = Date.now() - cachedEntry.timestamp
-                if (age < (cachedEntry.data ? (opts?.TTL ?? Infinity) : this.negativeCacheTTL)) { // return cached if TTL is not expired
-                    if (!(opts?.cache === 'swr' || (opts?.cache === 'best-effort' && !cachedEntry.data))) return cachedEntry.data
+                if (age < (cachedEntry.data ? (opts?.TTL ?? this.defaultCacheTTL) : this.negativeCacheTTL)) { // return cached if TTL is not expired
+                    if (!(opts?.cache === 'best-effort' && !cachedEntry.data)) return cachedEntry.data
                 }
             }
         }
@@ -383,12 +384,12 @@ export class Api {
             return req
         }
 
-        if (opts?.cache === 'swr' && cached) {
+        if (cached) { // swr
             fetchNetwork()
             return cached
         }
 
-        return (await fetchNetwork()) ?? cached // return cached if fetch failed
+        return await fetchNetwork()
     }
 
     // GET:/api/v1/entity/:ccid
