@@ -65,6 +65,8 @@ export class Api {
     defaultCacheTTL: number = Infinity
     negativeCacheTTL: number = 300
 
+    onMessageInvalidate?: (id: string) => void
+
     private inFlightRequests = new Map<string, Promise<any>>()
 
     constructor(authProvider: AuthProvider, cache: KVS) {
@@ -445,6 +447,7 @@ export class Api {
 
     invalidateMessage(id: string) {
         this.cache.invalidate(`message:${id}`)
+        this.onMessageInvalidate?.(id)
     }
 
     async getMessageWithAuthor<T>(messageId: string, author: string, hint?: string, opts?: FetchOptions<Message<T>>): Promise<Message<T>> {
