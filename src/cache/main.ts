@@ -16,6 +16,9 @@ export class IndexedDBKVS implements KVS {
     private storeName: string;
 
     constructor(dbName: string, storeName: string) {
+        if (!indexedDB) {
+            throw new Error("IndexedDB is not supported in this browser");
+        }
         this.dbName = dbName;
         this.storeName = storeName;
     }
