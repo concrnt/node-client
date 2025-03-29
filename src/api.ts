@@ -713,7 +713,7 @@ export class Api {
     }
 
     // Posts
-    async commit<T>(obj: any, host: string = ''): Promise<T> {
+    async commit<T>(obj: any, host: string = '', cls?: new () => T extends (infer U)[] ? U : T): Promise<T> {
 
         const ccid = this.authProvider.getCCID()
         const ckid = this.authProvider.getCKID()
@@ -736,11 +736,17 @@ export class Api {
         const authHeaders = await this.authProvider.getHeaders(host)
         Object.assign(requestOptions.headers, authHeaders)
 
-        return await fetch(`https://${host || this.defaultHost}${apiPath}/commit`, requestOptions)
+        const content = await fetch(`https://${host || this.defaultHost}${apiPath}/commit`, requestOptions)
             .then(async (res) => await res.json())
             .then((data) => {
                 return data.content
             })
+
+        if (cls) {
+            return Object.setPrototypeOf(content, cls.prototype)
+        }
+
+        return content
     }
 
     async createMessage<T>(
@@ -764,7 +770,7 @@ export class Api {
             policyDefaults
         }
 
-        return await this.commit<Message<T>>(documentObj)
+        return await this.commit<Message<T>>(documentObj, undefined, Message)
     }
 
     async createAssociation<T>(
@@ -793,7 +799,7 @@ export class Api {
             signedAt: new Date()
         }
 
-        return await this.commit<Association<T>>(documentObj, targetHost)
+        return await this.commit<Association<T>>(documentObj, targetHost, Association)
     }
 
     async upsertProfile<T>(
@@ -816,7 +822,7 @@ export class Api {
             policyParams,
         }
 
-        const ret = await this.commit<Profile<T>>(documentObj)
+        const ret = await this.commit<Profile<T>>(documentObj, undefined, Profile)
         if (semanticID) {
             this.invalidateProfile(`${semanticID}@${ccid}`)
         }
@@ -857,7 +863,7 @@ export class Api {
             policyParams,
         }
 
-        const ret = await this.commit<Timeline<T>>(documentObj, host)
+        const ret = await this.commit<Timeline<T>>(documentObj, host, Timeline)
         if (semanticID) {
             this.invalidateTimeline(`${semanticID}@${owner ?? ccid}`)
         }
@@ -903,7 +909,7 @@ export class Api {
             policyParams
         }
 
-        const ret = await this.commit<Subscription<T>>(documentObj)
+        const ret = await this.commit<Subscription<T>>(documentObj, undefined, Subscription)
         if (semanticID) {
             this.invalidateSubscription(`${semanticID}@${ccid}`)
         }
