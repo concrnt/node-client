@@ -1,4 +1,4 @@
-import { LoadKey, Sign } from "../crypto";
+import { JwtPayload, LoadKey, Sign } from "../crypto";
 import { ComputeCCID } from "../crypto";
 import { LoadSubKey } from "../crypto";
 import { CheckJwtIsValid } from "../crypto";
@@ -13,6 +13,7 @@ export interface AuthProvider {
     getHost: () => string;
 
     sign(data: string): string;
+    issueJWT: (claims: JwtPayload) => string;
 }
 
 
@@ -100,6 +101,10 @@ export class MasterKeyAuthProvider implements AuthProvider {
 
     sign(data: string): string {
         return Sign(this.privatekey, data)
+    }
+
+    issueJWT(claims: JwtPayload): string {
+        return IssueJWT(this.privatekey, claims)
     }
 }
 
@@ -190,6 +195,10 @@ export class SubKeyAuthProvider implements AuthProvider {
         return Sign(this.privatekey, data)
     }
 
+    issueJWT(claims: JwtPayload): string {
+        return IssueJWT(this.privatekey, claims)
+    }
+
 }
 
 export class GuestAuthProvider implements AuthProvider {
@@ -225,6 +234,10 @@ export class GuestAuthProvider implements AuthProvider {
     }
 
     sign(_data: string): never {
+        throw new Error("Method not implemented.");
+    }
+
+    issueJWT(_claims: JwtPayload): never {
         throw new Error("Method not implemented.");
     }
 }
