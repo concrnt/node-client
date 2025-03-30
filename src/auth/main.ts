@@ -104,6 +104,7 @@ export class MasterKeyAuthProvider implements AuthProvider {
     }
 
     issueJWT(claims: JwtPayload): string {
+        claims.iss ??= this.ccid
         return IssueJWT(this.privatekey, claims)
     }
 }
@@ -196,7 +197,8 @@ export class SubKeyAuthProvider implements AuthProvider {
     }
 
     issueJWT(claims: JwtPayload): string {
-        return IssueJWT(this.privatekey, claims)
+        claims.iss ??= this.ccid
+        return IssueJWT(this.privatekey, claims, {keyID: this.ckid})
     }
 
 }

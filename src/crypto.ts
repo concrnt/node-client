@@ -264,8 +264,15 @@ const atob = (input: string): string => {
     return ''
 }
 
-export const SignJWT = (payload: string, privatekey: string): string => {
-    const header = JSON.stringify({ alg: 'CONCRNT', typ: 'JWT' })
+export const SignJWT = (payload: string, privatekey: string, options?: {keyID?: string}): string => {
+    const headerJson: Record<string, string> = {
+        alg: 'CONCRNT',
+        typ: 'JWT',
+    }
+    if (options?.keyID) {
+        headerJson['kid'] = options.keyID
+    }
+    const header = JSON.stringify(headerJson)
     const body = makeUrlSafe(btoa(header) + '.' + btoa(payload))
     const bodyHash = keccak256(new TextEncoder().encode(body)).slice(2)
     const ellipsis = new Ec('secp256k1')
@@ -345,7 +352,7 @@ export const IsValid256k1PrivateKey = (key: string): boolean => {
     return privateKey > BigInt(0) && privateKey < n
 }
 
-export const IssueJWT = (key: string, claim?: JwtPayload): string => {
+export const IssueJWT = (key: string, claim?: JwtPayload, options?: {keyID?: string}): string => {
     if (!IsValid256k1PrivateKey(key)) return ''
     const payload = JSON.stringify({
         jti: uuidv4(),
@@ -353,5 +360,5 @@ export const IssueJWT = (key: string, claim?: JwtPayload): string => {
         exp: Math.floor((new Date().getTime() + 5 * 60 * 1000) / 1000).toString(),
         ...claim
     })
-    return SignJWT(payload, key)
+    return SignJWT(payload, key, options)
 }
