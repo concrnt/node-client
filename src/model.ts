@@ -189,6 +189,8 @@ export class Association<T> {
     document: string = ''
     signature: string = ''
     target: MessageID = ''
+    variant: string = ''
+    timelines: TimelineID[] = []
     cdate: string = ''
 
     get parsedDoc(): CCDocument.Association<T> {

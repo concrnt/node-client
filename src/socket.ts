@@ -31,23 +31,21 @@ export class Socket {
     connect() {
         this.ws = new WS('wss://' + (this.hostOverride ?? this.api.defaultHost) + '/api/v1/timelines/realtime');
 
-        this.ws.onmessage = (rawevent: any) => {
+        this.ws.onmessage = async (rawevent: any) => {
 
             const event: TimelineEvent = JSON.parse(rawevent.data);
             Object.setPrototypeOf(event, TimelineEvent.prototype)
 
             const document = event.parsedDoc
             if (document) {
-                switch (document.type) { // TODO
+                switch (document.type) {
                     case 'message':
                         if (event.resource) {
-                            /* TBI
                             const message: Message<any> = event.resource as Message<any>
                             Object.setPrototypeOf(message, Message.prototype)
                             message.ownAssociations = []
 
-                            this.api.cacheMessage(dummy_message as Message<any>)
-                            */
+                            await this.api.cache.set(`message:${message.id}`, message)
                         }
                     break
                     case 'association':
