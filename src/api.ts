@@ -17,8 +17,8 @@ import {
     TimelineID,
     TimelineItem
 } from "./model"
-import { KVS } from "./cache/main"
-import { AuthProvider } from "./auth/main"
+import { KVS } from "./cache"
+import { AuthProvider } from "./auth"
 import { fetchWithTimeout } from "./util"
 
 const apiPath = '/api/v1'
