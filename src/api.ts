@@ -628,7 +628,7 @@ export class Api {
 
         const host = await this.resolveTimelineHost(id)
 
-        const requestPath = `${apiPath}/timeline/${id}/associations`
+        const requestPath = `${apiPath}/timeline/${id.split('@')[0]}/associations`
         const resp = await this.fetchWithCredential<Association<any>[]>(host, requestPath)
         return (resp.content ?? []).map((item) => Object.setPrototypeOf(item, Association.prototype))
     }
