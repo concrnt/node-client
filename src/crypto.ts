@@ -53,6 +53,7 @@ const mnemonic_en2ja = (mnemonic_en: string): string | null => {
 export const GenerateIdentity = (): Identity => {
     const entrophy = randomBytes(16)
     const mnemonic = Mnemonic.fromEntropy(entrophy, null).phrase
+    if (!mnemonic) throw new Error('failed to generate mnemonic')
     const wallet = HDNodeWallet.fromPhrase(mnemonic, undefined, HDPath)
     const CCID = ComputeCCID(wallet.publicKey.slice(2))
     const privateKey = wallet.privateKey.slice(2)
@@ -60,7 +61,28 @@ export const GenerateIdentity = (): Identity => {
 
     const mnemonic_ja = mnemonic_en2ja(mnemonic)
 
-    if (!mnemonic || !mnemonic_ja) throw new Error('failed to generate mnemonic')
+    if (!mnemonic_ja) throw new Error('failed to generate mnemonic')
+
+    return {
+        mnemonic,
+        mnemonic_ja,
+        privateKey,
+        publicKey,
+        CCID
+    }
+}
+
+export const DeriveIdentity = (source: Uint8Array): Identity => {
+    const mnemonic = Mnemonic.fromEntropy(source, null).phrase
+    if (!mnemonic) throw new Error('failed to derive mnemonic from source')
+    const wallet = HDNodeWallet.fromPhrase(mnemonic, undefined, HDPath)
+    const CCID = ComputeCCID(wallet.publicKey.slice(2))
+    const privateKey = wallet.privateKey.slice(2)
+    const publicKey = wallet.publicKey.slice(2)
+
+    const mnemonic_ja = mnemonic_en2ja(mnemonic)
+
+    if (!mnemonic_ja) throw new Error('failed to convert mnemonic to Japanese')
 
     return {
         mnemonic,
