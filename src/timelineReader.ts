@@ -10,10 +10,12 @@ export class TimelineReader {
 
     body: TimelineItemWithUpdate[] = [];
     onUpdate?: () => void;
+    onNewItem?: (item: TimelineItem) => void;
     onRealtimeEvent?: (event: TimelineEvent) => void;
     socket?: Socket;
     api: Api;
     streams: string[] = [];
+    haltUpdate: boolean = false;
 
     hostOverride?: string;
 
@@ -29,6 +31,8 @@ export class TimelineReader {
             case 'message': {
                 if (this.body.find(m => m.resourceID === event.item.resourceID)) return;
                 const item = Object.assign(event.item, {lastUpdate: new Date()});
+                this.onNewItem?.(item);
+                if (this.haltUpdate) return;
                 this.body.unshift(item);
                 this.onUpdate?.();
                 break;
@@ -38,6 +42,8 @@ export class TimelineReader {
                 const target = this.body.find(m => m.resourceID === assDoc.target);
                 if (!target) return;
                 target.lastUpdate = new Date();
+                this.onNewItem?.(event.item);
+                if (this.haltUpdate) return;
                 this.onUpdate?.();
                 break;
             }
@@ -66,6 +72,8 @@ export class TimelineReader {
                         case 'm': {
                             if (this.body.find(m => m.resourceID === event.item.resourceID)) return;
                             const item = Object.assign(event.item, {lastUpdate: new Date()});
+                            this.onNewItem?.(item);
+                            if (this.haltUpdate) return;
                             this.body.unshift(item);
                             this.onUpdate?.();
                             break;
@@ -111,12 +119,14 @@ export class TimelineReader {
 
     async reload(): Promise<boolean> {
         let hasMore = true;
+        this.haltUpdate = true;
         const items = await this.api.getTimelineRecent(this.streams, this.hostOverride);
         const itemsWithUpdate = items.map(item => Object.assign(item, {lastUpdate: new Date()}));
         this.body = itemsWithUpdate;
         if (items.length < 16) {
             hasMore = false;
         }
+        this.haltUpdate = false;
         this.onUpdate?.();
         return hasMore
     }
