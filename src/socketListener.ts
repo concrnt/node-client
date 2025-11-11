@@ -38,8 +38,7 @@ export class SocketListener {
         await this.socket.waitOpen()
         this.socket.listen(streams, (event: TimelineEvent) => {
             const document = event.parsedDoc
-            if (!document) return
-            switch (document.type) {
+            switch (document?.type) {
                 case 'message':
                     this.emit('MessageCreated', event);
                     break;
@@ -58,7 +57,16 @@ export class SocketListener {
                     }
                     break;
                 default:
-                    console.info('unknown event', event)
+                    if (event.item.resourceID) {
+                        switch (event.item.resourceID[0]) {
+                            case 'm':
+                                this.emit('MessageCreated', event);
+                                break;
+                            case 'a':
+                                this.emit('AssociationCreated', event);
+                                break;
+                        }
+                    }
             }
         })
     }
