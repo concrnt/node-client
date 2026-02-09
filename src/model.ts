@@ -171,7 +171,12 @@ export class Message<T> {
     cdate: string = ''
 
     get parsedDoc(): CCDocument.Message<T> {
-        return JSON.parse(this.document)
+        let parsed = JSON.parse(this.document)
+        if ('author' in parsed) {
+            parsed.signer = parsed.author
+            parsed.body = parsed.value
+        }
+        return parsed
     }
 
     get parsedPolicy(): any {
@@ -194,7 +199,12 @@ export class Association<T> {
     cdate: string = ''
 
     get parsedDoc(): CCDocument.Association<T> {
-        return JSON.parse(this.document)
+        let parsed = JSON.parse(this.document)
+        if ('author' in parsed) {
+            parsed.signer = parsed.author
+            parsed.body = parsed.value
+        }
+        return parsed
     }
 }
 
@@ -212,7 +222,13 @@ export class Timeline<T> {
     mdate: string = ''
 
    get parsedDoc(): CCDocument.Timeline<T> {
-       return JSON.parse(this.document)
+       //return JSON.parse(this.document)
+       let parsed = JSON.parse(this.document)
+       if ('author' in parsed) {
+           parsed.signer = parsed.author
+           parsed.body = parsed.value
+       }
+       return parsed
    }
 }
 
@@ -239,7 +255,13 @@ export class Profile<T> {
     associations: Association<any>[] = []
 
     get parsedDoc(): CCDocument.Profile<T> {
-        return JSON.parse(this.document)
+        //return JSON.parse(this.document)
+        let parsed = JSON.parse(this.document)
+        if ('author' in parsed) {
+            parsed.signer = parsed.author
+            parsed.body = parsed.value
+        }
+        return parsed
     }
 }
 
@@ -258,7 +280,13 @@ export class Subscription<T> {
     mdate: string = ''
 
     get parsedDoc(): CCDocument.Subscription<T> {
-        return JSON.parse(this.document)
+        //return JSON.parse(this.document)
+        let parsed = JSON.parse(this.document)
+        if ('author' in parsed) {
+            parsed.signer = parsed.author
+            parsed.body = parsed.value
+        }
+        return parsed
     }
 }
 
